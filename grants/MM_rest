@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+SUBJECTS_DIR="/data/Luna1/MM/FS_Subjects/"
+DICOM_PAT="MR*"
+
+MRROOT="/data/Luna1/Raw/MultiModal/"
+
+function list_all {
+ echo "11075_20130625"
+}
+
+# given an id, pattern, and dicomcount
+# echo the 1 directory that matches or return error
+function subj_pat {
+ id="$1"
+ patt="$2"
+ cnt="$3"
+ mrdirs=($(findpattdcmcnt "$MRROOT/$id" "$patt" "$cnt") )
+ if ! checkarraycount 1 ${mrdirs[@]} ; then
+   warn "nothing fits $MRROOT/$id/$patt/MR*"  
+   return 1
+ fi
+ echo $mrdirs
+}
+
+function subj_t1 {
+ wantonlyoneid $@ || return 1
+ subj_pat $1 'axial_mprage*' 192 || return 1
+ return 0
+}
+
+function subj_t2 {
+ wantonlyoneid $@ || return 1
+ subj_pat $1 '*rest*' 150 || return 1
+ return 0
+}
+
+function subj_ref {
+ wantonlyoneid $@ || return 1
+ return 0
+}
+
+function subj_physio {
+ wantonlyoneid $@ || return 1
+ return 0
+}

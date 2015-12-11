@@ -1,0 +1,12 @@
+#!/usr/bin/bash
+PIPE_DESC="
+This pipeline processes rest data
+
+"
+PIPE_DEPENDS=""
+PIPE_VERSION=""
+FINALOUT=""
+
+function run_pipeline {
+}
+

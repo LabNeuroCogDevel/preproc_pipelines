@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+SUBJECTS_DIR="/data/Luna1/MM/FS_Subjects/"
+DICOM_PAT="MR*"
+
+function list_all {
+}
+
+function subj_t1 {
+ wantonlyoneid $@
+}
+
+function subj_t2 {
+ wantonlyoneid $@
+}
+function subj_ref {
+ wantonlyoneid $@
+}
+function subj_physio {
+ wantonlyoneid $@
+}

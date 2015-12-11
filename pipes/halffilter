@@ -1,0 +1,20 @@
+#!/usr/bin/bash
+PIPE_DESC="
+This pipeline processes rest data
+
+"
+PIPE_DEPENDS=""
+PIPE_VERSION=""
+FINALOUT=""
+
+function run_pipeline {
+ id="$1"
+ [ -z "$id" ] && warn "$FUNCNAME: no id given" && return 1
+
+ [ ! -d "$id" ] && mkdir $id
+
+ subj_t1 $id || echo "cannot find t1"
+ subj_t2 $id || echo "cannot find t2"
+
+}
+
