@@ -3,9 +3,9 @@ PIPE_DESC="
 This pipeline processes rest data
 
 "
-PIPE_DEPENDS=""
+PIPE_DEPENDS=()
 PIPE_VERSION=""
-FINALOUT=""
+FINALOUT=()
 
 function run_pipeline {
 }

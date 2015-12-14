@@ -3,14 +3,14 @@ redo "restPreproc"
 ## organize
 
 ### Output
- `/Volumes/Zeus/preproc/$grant/$pipe/$subj_$date`
+ `/Volumes/Zeus/preproc/$datasource/$pipe/$subj_$date`
 
 pipes can depend on other pipes (t1 for t2)
 
 ### Configure
- `grants/$grant` 
+ `data/$datasource` 
 
-Contains info about MR protocol for grant
+Contains info about MR protocol for datasource
  * `SUBJECTS_DIR` FreeSurfer directory
  * `DICOM_PAT` e.g. `MR*`
  * `list_all` function to list all subject ids
@@ -28,4 +28,4 @@ contains
  * `FINALOUT`     final output name, to check if complete
  * `run_pipeline` function to run pipeline given DCM folder input, optionally ref and physio.
 
- `run_pipeline` should make subject directories only. will be run from grant/pipeline directory. Will have $PPSUBJSDIR avaible
+ `run_pipeline` should make subject directories only. will be run from datasource/pipeline directory. Will have $PPSUBJSDIR avaible

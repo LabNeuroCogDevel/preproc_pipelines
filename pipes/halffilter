@@ -1,20 +1,64 @@
 #!/usr/bin/bash
 PIPE_DESC="
-This pipeline processes rest data
-
+This pipeline processes rest data for Scott's MEG subjects
+scrubbing no
+wavlet    yes
+filter    highpass only (.008)
 "
-PIPE_DEPENDS=""
-PIPE_VERSION=""
-FINALOUT=""
+PIPE_DEPENDS=("MHT1_2mm")
+PIPE_VERSION="20151211"
+FINALOUT=( ".preprocessfunctional_complete" )
+
+# 
+function list_all {
+ echo "11075_20130625"
+}
+
+function findt1final {
+ id="$1"
+ wantonlyoneid $id || return 1
+
+ # need t1 should be done b/c of depends
+ mpragedir=$PPSUBJSDIR/../MHT1_2mm/$id
+ [ ! -d $mpragedir ] && warn "cannot find $mpragedir" && return 1
+ 
+ # should have bet and warp outputs
+ bet=$mpragedir/mprage_bet.nii.gz
+ warp=$mpragedir/mprage_warpcoef.nii.gz
+ [ ! -r "$bet"  ] && warn "cannot read bet '$bet'" && return 1
+ [ ! -r "$warp" ] && warn "cannot read warp '$warp'" && return 1
+ echo "$bet $warp"
+}
 
 function run_pipeline {
  id="$1"
  [ -z "$id" ] && warn "$FUNCNAME: no id given" && return 1
 
+ read bet warp < <(findt1final $id)
+
  [ ! -d "$id" ] && mkdir $id
+ cd $id
 
- subj_t1 $id || echo "cannot find t1"
- subj_t2 $id || echo "cannot find t2"
+ t2dir=$(subj_t2 $id)
+ [ -z "$t2dir" ] && warn "cannot find t2dir for $id" && return 1
 
+ #echo "'$t2dir' '$bet' '$warp'"
+ #return 0
+
+ if [ ! -r 'functional.nii.gz' ]; then
+   [ $(find . -maxdepth 1 -type l -iname 'MR*' | wc -l) -gt 0 ] && rm MR*
+   ! ln -s $t2dir/MR* ./ && warn "cannot link $t2dir/MR* files" && return 1
+ fi
+
+ preprocessFunctional -delete_dicom yes -dicom 'MR*' \
+   -mprage_bet $bet -warpcoef $warp \
+   -4d_slice_motion -wavelet_despike  \
+   -rescaling_method 10000_globalmedian \
+   -template_brain MNI_3mm    \
+   -nuisance_compute 6motion,rx,ry,rz,tx,ty,tz,wm,csf,gs,d6motion,drx,dry,drz,dtx,dty,dtz,dwm,dcsf,dgs \
+   -no_hp #default is 80, maybe want 125s (.008)
+
+   # these options are taken from the dicoms, hopefully
+   #-tr 1.5 -slice_acquisition seqasc  \
 }
 

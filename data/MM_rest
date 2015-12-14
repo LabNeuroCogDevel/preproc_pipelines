@@ -2,6 +2,10 @@
 SUBJECTS_DIR="/data/Luna1/MM/FS_Subjects/"
 DICOM_PAT="MR*"
 
+
+FUNCTR="2"
+FUNCSLICEACQ="seqasc"
+
 MRROOT="/data/Luna1/Raw/MultiModal/"
 
 function list_all {
