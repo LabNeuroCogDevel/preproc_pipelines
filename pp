@@ -1,39 +1,54 @@
 #!/usr/bin/env bash
 
 ## USAGE
-# $0 grant pipeline
+# $0 datasource pipeline [ids]
 # 
-#  run preprocessing pipeline on grant data
-#   - grant is a file in grants
+#  run preprocessing pipeline on datasource data
+#   - datasource is a file in data/
 #   - pipeline is a file in pipelines
+#   - OPTIONAL: subject ids to spefically run on
+#  SPECIAL VAIRABLES
+#   - ONEONLY   -- only run one subject
+#   - TESTONLY  -- print which subjects would be run
+#   - MAXJOBS   -- change default max no jobs
 #
 ## END USAGE
+
+# default to 8 max jobs
+[ -z "$MAXJOBS" ] && MAXJOBS=8
+# SLEEPTIME default is 60
 
 scriptdir=$(cd $(dirname $0);pwd)
 source $scriptdir/funs_src.bash
 
 [ -z "$2" ] && usage "need two arguments!"
+datasource=$1; pipeline=$2
 
-# we can specify grant and pipeline as files
+# we can specify datasource and pipeline as files
 # but if we didn't, check inisde a subdirectory
-[ ! -r $grant    ] && grant="$scriptdir/grants/$1"
+[ ! -r $datasource    ] && datasource="$scriptdir/data/$1"
 [ ! -r $pipeline ] && pipeline="$scriptdir/pipes/$2"
 
-# before we go on, make sure we have a grant and pipeline file
-[ ! -r "$grant"    ] && usage "cannot read grant ($1) file $grant"
-[ ! -r "$pipeline" ] && usage "cannot read pipeline ($2) file $pipeline"
+# before we go on, make sure we have a datasource and pipeline file
+[ ! -r "$datasource"    ] && usage "cannot read datasource ($1) file '$datasource'"
+[ ! -r "$pipeline" ] && usage "cannot read pipeline ($2) file '$pipeline'"
 
 # get the goodies inside each file
-source $grant
+source $datasource
 source $pipeline
 
 ## we want to take the arguements as ids
-## or use the list_all function from grant
+## or use the list_all function from datasource
 
-# get grant and pipeline off the arg list
+# get datasource and pipeline off the arg list
 shift; shift;
 
+# set the exit trap so we when we die 
+trap trapmsg EXIT
+
 # def function to pick which to use
+# arguments as ids on the commad line
+# or list_all sourced from datasource file
 function args_or_list_all_ids {
   if [ -z "$1" ]; then
    list_all
@@ -43,22 +58,61 @@ function args_or_list_all_ids {
 }
 
 
-# set the exit trap so we when we die 
-trap trapmsg EXIT
 
-# get to the subjects root directory for this grant/pipeline
-PPSUBJSDIR="/Volumes/Zeus/preproc/$(basename $grant)/$(basename $pipeline)"
-[ ! -d $PPSUBJSDIR] && mkdir -p $PPSUBJSDIR
+#  - check for final out
+#  - run dependencies
+#  - run run_pipeline
+function runwithdepends {
+ id=$1
+ ## Do we need to run? Have we already finished
+ # default to already finished until we are missing a final output
+ local alreadyfinished="yes"
+ for fout in ${FINALOUT[@]}; do
+   [ ! -r $id/$fout ] && alreadyfinished="no" && break
+ done
+ [ "$alreadyfinished" == "yes" ] && warn "# $(basename $datasource) $(basename $pipeline) $id already finished!" && continue
+
+
+ ## run dependancies
+ # make sure all dependencies are run
+ local alldepends="yes"
+ for depend in ${PIPE_DEPENDS[@]}; do
+   if ! eval $scriptdir/$(basename $0) $(basename $datasource) $(basename $depend) $id ; then
+     warn "SKIPPING: cannot finish $id's depend $depend"
+     alldepends="no"
+     break
+   fi
+ done
+ [ "$alldepends" == "no" ] && continue
+
+
+ # if we are testing, just print the ID we would have run
+ if [ -n "$TESTONLY" ]; then
+   echo "# run_pipeline $id # [$datasource $pipeline]"
+ else
+   run_pipeline $id
+ fi
+
+}
+
+## ACTUALLY DO STUFF
+
+# get to the subjects root directory for this datasource/pipeline
+PPSUBJSDIR="/Volumes/Zeus/preproc/$(basename $datasource)/$(basename $pipeline)"
+[ ! -d "$PPSUBJSDIR" ] && mkdir -p $PPSUBJSDIR
+
 cd $PPSUBJSDIR
 
-# MEAT OF WRAPPER
+# warp it all together
 args_or_list_all_ids $@ | while read id; do
- [ -r $id/$FINALOUT ] && warn "$id already finished!" && continue
- # make sure all dependencies are run
- for depend in $DEPENDS; do
-   $0 $grant $depend $id
- done
+ echo "# launching $datasource $pipeline for $id $(njobs)/$MAXJOBS jobs"
+ runwithdepends $id &
 
- run_pipeline $id
+ # if we only want to run one, end here
+ [ -n "$ONEONLY" ] && break
+ 
+ waitforjobs $MAXJOBS
 done
 
+
+wait
