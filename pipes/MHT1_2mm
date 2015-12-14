@@ -1,0 +1,27 @@
+#!/usr/bin/bash
+PIPE_DESC="
+Run preprocessMprage with default options
+"
+PIPE_DEPENDS=""
+PIPE_VERSION="20151214"
+FINALOUT="mprage_warpcoef.nii.gz"
+
+function list_all {
+ echo "11075_20130625"
+}
+
+# run from $PPSUBJSDIR 
+function run_pipeline {
+ # check id input and make/cd into id dir
+ id="$1"
+ wantonlyoneid $id || return 1
+ [ ! -d "$id" ] && mkdir $id
+
+ # find the t1dir with MRs in it
+ t1dir=$(subj_t1 $id)
+ [ -z $t1dir ] && warn "cannot find t1 dir for $id" && return 1
+ ln -s $t1dir/MR* ./ || return 1
+ preprocessMprage -r MNI_2mm -d y && touch ".mprage_complete"
+ 
+}
+
