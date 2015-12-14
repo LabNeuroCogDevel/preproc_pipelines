@@ -6,11 +6,14 @@
 function infobar {
  echo "[$(whoami)@$(hostname):$(pwd)#$(date +%F/%M:%H)]"
 }
+function whatscriptfuns {
+  echo "${FUNCNAME[@]} :: ${BASH_SOURCE[@]}"
+}
 
 # exit error message
 function trapmsg {
  err=$?
- [ $err -ne 0 ] && warn "$0 exited with error $err!\n$(infobar)\n[${FUNCNAME[@]} :: ${BASH_SOURCE[@]}]"
+ [ $err -ne 0 ] && warn "$0 exited with error $err!\n$(infobar)\n[$scriptwhereami]"
 }
 
 # exit with error function
@@ -62,4 +65,22 @@ function checkarraycount {
  cnt=$1; shift
  [ $# -ne $cnt ] && warn "${FUNCNAME[1]}: count not exactly $cnt '$@'" && return 1
  return 0
+}
+
+
+## bash job control
+function njobs { jobs -p | wc -l }
+# optionally take maxjobs as argument, expect sleeptime to be in enviornment
+function waitforjobs {
+ # set defaults, maxjobs can come as an arg
+ [ -n "$1" ] && MAXJOBS=$1
+ [ -z $MAXJOBS ] && MAXJOBS=1
+ [ -z $SLEEPTIME ] && SLEEPTIME=60
+
+ local cnt=1
+ while [ $(njobs) -ge $MAXJOBS ]; do
+   echo "# $cnt @ $MAXJOBS jobs, wait ${SLEEPTIME}s | $(infobar) $(whatscriptfuns) "
+   sleep $SLEEPTIME 
+   let cnt++
+ done
 }
