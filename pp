@@ -26,7 +26,7 @@ datasource=$1; pipeline=$2
 
 # we can specify datasource and pipeline as files
 # but if we didn't, check inisde a subdirectory
-[ ! -r $datasource    ] && datasource="$scriptdir/source/$1"
+[ ! -r $datasource    ] && datasource="$scriptdir/sources/$1"
 [ ! -r $pipeline ] && pipeline="$scriptdir/pipes/$2"
 
 # before we go on, make sure we have a datasource and pipeline file
