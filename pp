@@ -26,7 +26,7 @@ datasource=$1; pipeline=$2
 
 # we can specify datasource and pipeline as files
 # but if we didn't, check inisde a subdirectory
-[ ! -r $datasource    ] && datasource="$scriptdir/data/$1"
+[ ! -r $datasource    ] && datasource="$scriptdir/source/$1"
 [ ! -r $pipeline ] && pipeline="$scriptdir/pipes/$2"
 
 # before we go on, make sure we have a datasource and pipeline file
@@ -105,14 +105,13 @@ cd $PPSUBJSDIR
 
 # warp it all together
 args_or_list_all_ids $@ | while read id; do
- echo "# launching $datasource $pipeline for $id $(njobs)/$MAXJOBS jobs"
  runwithdepends $id &
+ echo "# launched $datasource::$pipeline for $id ($(njobs)/$MAXJOBS jobs)"
 
  # if we only want to run one, end here
  [ -n "$ONEONLY" ] && break
  
  waitforjobs $MAXJOBS
 done
-
 
 wait

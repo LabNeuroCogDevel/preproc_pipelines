@@ -69,7 +69,9 @@ function checkarraycount {
 
 
 ## bash job control
-function njobs { jobs -p | wc -l }
+function njobs {
+ jobs -p | wc -l 
+}
 # optionally take maxjobs as argument, expect sleeptime to be in enviornment
 function waitforjobs {
  # set defaults, maxjobs can come as an arg

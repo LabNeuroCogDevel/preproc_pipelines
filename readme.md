@@ -8,7 +8,7 @@ redo "restPreproc"
 pipes can depend on other pipes (t1 for t2)
 
 ### Configure
- `data/$datasource` 
+ `source/$datasource` 
 
 Contains info about MR protocol for datasource
  * `SUBJECTS_DIR` FreeSurfer directory
