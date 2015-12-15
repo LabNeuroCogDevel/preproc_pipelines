@@ -90,9 +90,11 @@ function runwithdepends {
  if [ -n "$TESTONLY" ]; then
    echo "# run_pipeline $id # [$datasource $pipeline]"
  else
-   run_pipeline $id
+   # ! run_pipeline $id && err "did not succesfully finish run_pipeline $id"
+   run_pipeline $id || warn "did not succesfully finish run_pipeline $id"
  fi
-
+ 
+ return 0
 }
 
 ## ACTUALLY DO STUFF
@@ -105,7 +107,7 @@ cd $PPSUBJSDIR
 
 # warp it all together
 args_or_list_all_ids $@ | while read id; do
- runwithdepends $id &
+ runwithdepends $id  # &
  echo "# launched $datasource::$pipeline for $id ($(njobs)/$MAXJOBS jobs)"
 
  # if we only want to run one, end here
@@ -114,4 +116,5 @@ args_or_list_all_ids $@ | while read id; do
  waitforjobs $MAXJOBS
 done
 
+echo "# all jobs forked, waiting to complete"
 wait

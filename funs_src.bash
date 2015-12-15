@@ -86,3 +86,26 @@ function waitforjobs {
    let cnt++
  done
 }
+
+# given an id, pattern, and dicomcount
+# echo the 1 directory that matches or return error
+# expect dir like mrroot/ id / protocol pattern / MR*
+# will check count to the number of dicoms in directory
+# and return the directory that matches
+# USAGE:
+#  subj_mr_pat $id 'axial_mprage*' 192 || return 1
+#  - find mprage directory with 192 dicoms for $id
+function subj_mr_pat {
+ path="$1"
+ patt="$2"
+ cnt="$3"
+ [ -z "$MRROOT" ] && warn "MRROOT not in env!" && return 1
+ [ -z "$3"      ] && warn "$FUNCNAME not given enough arguemetns" && return 1 
+
+ mrdirs=($(findpattdcmcnt "$path" "$patt" "$cnt") )
+ if ! checkarraycount 1 ${mrdirs[@]} ; then
+   warn "nothing fits $path/$patt/MR*"  
+   return 1
+ fi
+ echo $mrdirs
+}

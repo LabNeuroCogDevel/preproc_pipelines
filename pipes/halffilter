@@ -9,7 +9,8 @@ PIPE_DEPENDS=("MHT1_2mm")
 PIPE_VERSION="20151211"
 FINALOUT=( ".preprocessfunctional_complete" )
 
-# 
+#  override list_all for data
+#  use only subjects scott cares about
 function list_all {
  echo "11075_20130625"
 }
