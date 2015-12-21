@@ -1,0 +1,69 @@
+#!/usr/bin/bash
+PIPE_DESC80="Preprocess fieldmap mag and phase"
+PIPE_DESC="
+Run the fieldmap portion of preprocessFunctional
+"
+PIPE_DEPENDS=""
+PIPE_VERSION="20151215"
+FINALOUT=(".prepare_fieldmap_complete" ".fieldmap_phase" ".fieldmap_magnitude")
+
+function check_complete {
+ wantonlyoneid $@ || return 1
+ has_finalout  $1 || return 1
+ return 0
+}
+
+# run from $PPSUBJSDIR 
+function run_pipeline {
+ # check id input and make/cd into id dir
+ id="$1"
+ wantonlyoneid $id || return 1
+ [ ! -d "$id" ] && mkdir $id
+ cd $id
+
+ # find the t1dir with MRs in it
+ read mrmag mrphase < <(subj_fm $id)
+ [ -z "$mrmag" -o -z "$mrphase" ] && return 1
+
+
+ # create directory, link in MR*, add MR* to variable
+ for fm in mrmag mrphase; do
+   [ -d  $fm ] && continue
+   mkdir $fm
+   ! ln -s ${!fm}/MR* $fm && warn "should: rm -r $(pwd)/$fmdir" && return 1
+ done
+
+ fm_magnitude='mrmag/MR*'
+ fm_phase='mrphase/MR*'
+
+ ####
+ ## UGLY HACK TO GET MICHEALS Field warping code to organize field mappings
+ ####
+
+ ## get MH script functions
+ hmsrc=$(dirname $(which preprocessFunctional))/preproc_functions
+ # /opt/ni_tools/fmri_processing_scripts/preproc_functions/prepare_fieldmap
+ source $hmsrc/helper_functions
+ source $hmsrc/prepare_fieldmap
+
+ ## set expected variables
+ mcMats=0
+ logFile="$(pwd)/FM.log"
+ fm_cfg=$(dirname $hmsrc)/fmcfg/MB5_TR1.0_TE30_60slc.fmcfg
+ ## and expected files
+ touch mc_target_brain.nii.gz $logFile
+
+ # run
+ prepare_fieldmap  || echo "# preprare_fieldmap ended with error (expected)"
+
+ # remove junk
+ ! rm -r unwarptemps/ unwarp mc_target_brain.nii.gz && warn "# did not create expected junk files!" && return 1
+ # rm .fm{phase,magnitude}_inprogress
+
+ # make sure we have what we want
+ [ ! -r $FINALOUT ] && echo "do not have $(pwd)/$FINALOUT" && return 1
+
+ # exit successfuly
+ return 0
+}
+

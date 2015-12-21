@@ -1,0 +1,44 @@
+#!/usr/bin/bash
+PIPE_DESC80="copy FM, to be processed by another pipeline"
+PIPE_DESC="
+Run the fieldmap portion of preprocessFunctional
+"
+PIPE_DEPENDS=""
+PIPE_VERSION="20151215"
+FINALOUT=("mrmag/linkedfrom" "mrphase/linkedfrom")
+
+function check_complete {
+ wantonlyoneid $@ || return 1
+ id="$1"
+
+ #TODO: mrmag MR* = 2x mpahse MR*
+
+ has_finalout $id || return 1
+ return 0
+}
+
+# run from $PPSUBJSDIR 
+function run_pipeline {
+ # check id input and make/cd into id dir
+ wantonlyoneid $@ || return 1
+ id="$1"
+ [ ! -d "$id" ] && mkdir $id
+ cd $id
+
+ # find the t1dir with MRs in it
+ read mrmag mrphase < <(subj_fm $id)
+ [ -z "$mrmag" -o -z "$mrphase" ] && return 1
+
+
+ # create directory, link in MR*, add MR* to variable
+ for fm in mrmag mrphase; do
+   [ -d  $fm ] && continue
+   mkdir $fm
+   ! ln -s ${!fm}/MR* $fm && warn "should: rm -r $(pwd)/$fmdir" && return 1
+   echo "${!fm}/" > ${fm}_linkedfrom
+ done
+
+ # exit successfuly
+ return 0
+}
+

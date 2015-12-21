@@ -1,12 +1,25 @@
 #!/usr/bin/bash
+PIPE_FOR="INITIALS of who pipeline is written for"
+PIPE_DESC80="80 char or less desc"
 PIPE_DESC="
 This pipeline processes rest data
 
 "
 PIPE_DEPENDS=()
-PIPE_VERSION=""
+PIPE_VERSION="YYYYMMDD"
 FINALOUT=()
 
+function check_complete {
+ wantonlyoneid $@ || return 1
+ has_finalout  $1 || return 1
+ return 0
+}
+
 function run_pipeline {
+ wantonlyoneid $@ || return 1
+ id=$1
+ [ ! -d $id ] && mkdir $id
+ cd $id
+
 }
 

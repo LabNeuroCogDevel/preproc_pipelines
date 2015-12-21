@@ -1,4 +1,6 @@
 #!/usr/bin/bash
+PIPE_FOR="ALL"
+PIPE_DESC80="preprocesMprage 2mm"
 PIPE_DESC="
 Run preprocessMprage with default options
 "
@@ -6,6 +8,11 @@ PIPE_DEPENDS=""
 PIPE_VERSION="20151214"
 FINALOUT=("mprage_warpcoef.nii.gz" "mprage_bet.nii.gz")
 
+function check_complete {
+ wantonlyoneid $@ || return 1
+ has_finalout  $1 || return 1
+ return 0
+}
 # run from $PPSUBJSDIR 
 function run_pipeline {
  # check id input and make/cd into id dir
