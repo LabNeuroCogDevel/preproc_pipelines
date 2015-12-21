@@ -51,7 +51,7 @@ function findpattdcmcnt  {
  pat=$1;     shift
  dicomcnt=$1;shift
 
- [ ! -d "$root" ] && warn "$FUNCNAME needs a directory not $root" && return 1
+ [ ! -d "$root" ] && warn "$FUNCNAME needs a directory not $root (${FUNCNAME[@]})" && return 1
 
  find $root -maxdepth 1 -iname "$pat" | while read d; do
    cnt=$(ls $d/MR* | wc -l)
@@ -87,6 +87,24 @@ function waitforjobs {
  done
 }
 
+
+# check finalout to see if we've already finished
+# expect to be in PPSUBJSDIR 
+# that is $id/$file is where to check for final files
+# success if has final, return error otherwise
+function has_finalout {
+ [ -z "$FINALOUT" ] && warn "#${FUNCNAME[1]} needs to define FINALOUT" && return 1
+ wantonlyoneid $@ || return 1
+ id="$1"
+ local alreadyfinished="yes"
+ for fout in ${FINALOUT[@]}; do
+   [ ! -r $id/$fout ] && alreadyfinished="no" && break
+ done
+ [ "$alreadyfinished" == "yes" ] && warn "# $(basename "$datasource") $(basename "$pipeline") $id already finished!" && return 0
+
+ return 1
+}
+
 # given an id, pattern, and dicomcount
 # echo the 1 directory that matches or return error
 # expect dir like mrroot/ id / protocol pattern / MR*
@@ -108,4 +126,100 @@ function subj_mr_pat {
    return 1
  fi
  echo $mrdirs
+}
+
+
+# find t1 (from within functional run_pipeline)
+function find_t1final {
+ wantonlyoneid $@ || return 1
+ id="$1"
+
+ [ -z "$PPSUBJSDIR" ] && 
+   warn "need PPSUBJSDIR (root of preprocessed subjects) to be defined" && return 1
+
+ # need t1 should be done b/c of depends
+ mpragedir=$PPSUBJSDIR/../MHT1_2mm/$id
+ [ ! -d $mpragedir ] && warn "# cannot find $mpragedir" && return 1
+ 
+ # should have bet and warp outputs
+ bet=$mpragedir/mprage_bet.nii.gz
+ warp=$mpragedir/mprage_warpcoef.nii.gz
+ [ ! -r "$bet"  ] && warn "# cannot read bet '$bet'" && return 1
+ [ ! -r "$warp" ] && warn "# cannot read warp '$warp'" && return 1
+ echo "$bet $warp"
+}
+
+# find field maps (from within functional run_pipeline)
+# return path to each fm reconstructed
+function find_fm {
+ wantonlyoneid $@ || return 1
+ id="$1"
+ [ -z "$PPSUBJSDIR" ] && 
+   warn "need PPSUBJSDIR (root of preprocessed subjects) to be defined" && return 1
+
+ magphase=""
+
+
+ # MHFM
+ #fmdir=$PPSUBJSDIR/../MHFM/$id/
+ # meh -- still tries to make from MRs
+ #[ ! -r $fmdir ] && warn "# missing fm dir $fmdir for $id" && return 1
+ #for fm in magnitude phase; do
+ # locfile=$(find $fmdir -iname ".fieldmap_$fm"|sed 1q)
+ # [ -z "$locfile" ] && warn "# missing $fm fm location: $fmdir/.fieldmap_$fm*" && return 1
+ # fmfile="$fmdir/$(cat $locfile).nii.gz"
+ # [ ! -r "$fmfile" ]  && warn "# missing fm file: $fmfile" && return 1
+ # 
+ # magphase="$magphase $fmfile"
+ #done
+
+
+ # cpFM
+ fmdir=$PPSUBJSDIR/../cpFM/$id/
+ for fm in mag phase; do
+  d=$fmdir/mr$fm
+  [ ! -d $d ] && warn "# missing fm dir $d for $id" && return 1
+  [ $(find $d -iname 'MR*' -maxdepth 1 |wc -l) -lt 0 ] && warn "# no MR* in fm dir $d for $id" && return 1
+  
+  magphase="$magphase $d/MR\*"
+ done
+
+ # echo it
+ echo $magphase
+}
+
+
+# do we still have a lock file?
+# has enough time passed to clear the lock
+lock_time_compare() {
+ local MAXWAITHOURS=4
+ local lockfile="$1"
+ [ ! -r $lockfile ] && return 0
+ # from HM prepair_fieldmaps
+ local now=$(date +%s)
+ local ctime=$(cat $lockfile)
+
+ [[ ! $ctime =~ [0-9]? ]] && warn "# malformed lock file '$lockfile', remove me"
+
+ if [ "$((( $now-$ctime )))" -gt "$((($MAXWAITHOURS*60*60)))" ]; then
+    warn "# it's been over 4 hours, removing $lockfile" 
+    rm $lockfile 
+    return 0
+ fi
+
+ return 1
+}
+
+# write a lock file
+# if we have one already, wait for it to clear
+# clear it if it's over 4 hours old
+check_write_lock() {
+ [ -z "$1" ] && warn "$FUNCNAME need file!" && return 1
+
+ while : ; do
+   lock_time_compare "$1" && break
+   sleep 10
+ done
+
+ date +%s > $lockfile
 }
