@@ -97,7 +97,7 @@ function runwithdepends {
  # make sure all dependencies are run
  local alldepends="yes"
  for depend in ${PIPE_DEPENDS[@]}; do
-   if ! eval "MAXJOBS=1 $scriptdir/$(basename $0) $(basename $datasource) $(basename $depend) $id"; then
+   if ! $scriptdir/$(basename $0) $(basename $datasource) $(basename $depend) $id; then
      warn "SKIPPING: cannot finish $id's depend $depend"
      alldepends="no"
      break
@@ -163,4 +163,4 @@ done
 #echo "# all jobs forked, waiting to complete"
 wait
 # any jobs forked by children are not catpured here
-ps -ef
+#[ $# -gt 1 -o $MAXJOBS -gt 1 ] && ps
