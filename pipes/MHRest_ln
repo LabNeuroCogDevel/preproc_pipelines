@@ -1,0 +1,76 @@
+#!/usr/bin/bash
+PIPE_FOR="SM"
+PIPE_DESC80="MMY2 standard rest: -scrub +wave +hpfilter.009-0.08 +reg:m,wm,csf,alldervs"
+PIPE_DESC="
+This pipeline processes rest data for Scott's MEG subjects for multimodal pre-multiband+field warping (Year2)
+scrubbing no
+wavlet    yes
+filter    standard .009-.08
+regs      6motion,wm,csf,d6motion,dwm,dcsf 
+"
+PIPE_DEPENDS=("MHT1_2mm" "halffilter")
+PIPE_VERSION="20151221"
+FINALOUT=( ".preprocessfunctional_complete" )
+
+#  override list_all for data
+#  use only subjects scott cares about
+function list_all {
+ cat <<EOF
+10644_20130327
+10662_20130509
+10873_20130610
+10895_20130201
+10910_20130207
+10915_20130301
+10918_20130129
+10931_20130219
+10945_20130311
+10960_20130402
+10997_20130329
+11043_20130307
+11046_20130211
+11052_20130820
+11059_20130401
+11075_20130625
+11126_20130211
+11136_20130218
+11163_20130507
+11165_20130513
+11171_20130529
+11173_20130603
+11180_20130617
+11188_20130625
+11189_20130626
+11190_20130627
+11193_20130701
+11196_20130711
+EOF
+}
+
+function check_complete {
+ wantonlyoneid $@ || return 1
+ has_finalout  $1 || return 1
+ return 0
+}
+
+function run_pipeline {
+ wantonlyoneid $@ || return 1
+
+ id="$1"
+ [ ! -d "$id" ] && mkdir $id
+ cd $id
+
+ # find inputs from previous pipeline and link all that are useful into this subjs pipeline directory
+ local prevpipedir="$(pwd)/../../halffilter/$id"
+ link_prev_pipe "$prevpipedir" "$prevpipedir/.rescaling_complete" || return 1
+ # we want to use our own logs
+ [ -L "preprocessFunctional.log" ] && unlink preprocessFunctional.log
+
+ # modify the stored command that is linked
+ [ -L .preproc_cmd ] && unlink .preproc_cmd # remove link
+ sed 's/-bandpass_filter 0.009 9999/-bandpass_filter 0.009 0.08/' $prevpipedir/.preproc_cmd > .preproc_cmd
+
+ yes | preprocessFunctional 
+
+}
+

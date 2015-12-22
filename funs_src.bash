@@ -223,3 +223,23 @@ check_write_lock() {
 
  date +%s > $lockfile
 }
+
+
+# link in all files from a diretory($1) not newer than a file ($2)
+link_prev_pipe() {
+ [ -z "$2" ] && warn "$FUNCNAME needs 2 args: folder and not newer file" && return 1
+ local prevpipedir="$1"
+ local lastgoodfile="$2"
+ [ ! -d "$prevpipedir" ] && warn "$FUNCNAME: previous pipe directory '$prevpipedir' does not exist" && return 1
+ [ ! -e "$lastgoodfile" ] && warn "$FUNCNAME: last good file '$lastgoodfile' does not exist" && return 1
+
+ # link in previous run
+ find "$prevpipedir" -not -newer "$lastgoodfile" -maxdepth 1 | while read f; do
+  # have we already linked in the file?
+  [ -e "$(basename "$f")" ] && continue #&& warn "already have $f" && continue
+  # link in file
+  ln -s "$f" ./ 
+  # make sure we dont write to this file
+  [ -w "$f" ] && chmod -w "$f"
+ done
+}

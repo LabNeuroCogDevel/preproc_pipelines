@@ -139,7 +139,7 @@ args_or_list_all_ids $@ | while read id; do
 
  # only one ID, don't fork
  # but end in error if we dont finish succesfully 
- if [ $# -eq 1 ]; then
+ if [ $# -eq 1 -o -n "$ONEONLY" ]; then
    runwithdepends $id  || err "could not finish $id"
 
  # only one job, dont fork

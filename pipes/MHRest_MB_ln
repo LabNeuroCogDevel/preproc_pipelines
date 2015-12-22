@@ -1,0 +1,47 @@
+#!/usr/bin/bash
+PIPE_FOR="SM"
+PIPE_DESC80="MMY3(+4?) standard rest pipeline: -scrub +wave +bp.009-0.08 +reg:m,wm,csf,alldervs"
+PIPE_DESC="
+This pipeline processes rest data for Scott's MEG subjects
+using Multiband Data (using fieldmaps and ref&func from hdr/img )
+b/c half filter was already run, this depends on that and links in from it
+scrubbing no
+wavlet    yes
+filter    stadnard:0.009-0.08
+regs      6motion,wm,csf,d6motion,dwm,dcsf 
+"
+PIPE_DEPENDS=("MHT1_2mm" "cpFM" "halffilter_MB" )
+PIPE_VERSION="20151221"
+FINALOUT=( ".preprocessfunctional_complete" )
+
+function check_complete {
+ wantonlyoneid $@ || return 1
+ has_finalout  $1 || return 1
+ return 0
+}
+
+function run_pipeline {
+ wantonlyoneid $@ || return 1
+
+ id="$1"
+ [ ! -d "$id" ] && mkdir $id
+ cd $id
+
+ # find inputs from previous pipeline and link all that are useful into this subjs pipeline directory
+ local prevpipedir="../../halffilter_MB/$id"
+ link_prev_pipe "$prevpipedir" "$prevpipedir/.rescaling_complete" || return 1
+ # we want to use our own logs
+ [ -L "preprocessFunctional.log" ] && unlink preprocessFunctional.log
+
+ # modify the stored command that is linked
+ [ -L .preproc_cmd ] && unlink .preproc_cmd # remove link
+ sed 's/-bandpass_filter 0.009 9999/-bandpass_filter 0.009 0.08/' $prevpipedir/.preproc_cmd > .preproc_cmd
+
+ # rerun with new bandpass options
+ yes| preprocessFunctional 
+
+ check_complete $id || return 1
+
+ return 0
+}
+
