@@ -162,3 +162,5 @@ done
 
 #echo "# all jobs forked, waiting to complete"
 wait
+# any jobs forked by children are not catpured here
+ps -ef

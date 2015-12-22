@@ -233,6 +233,9 @@ link_prev_pipe() {
  [ ! -d "$prevpipedir" ] && warn "$FUNCNAME: previous pipe directory '$prevpipedir' does not exist" && return 1
  [ ! -e "$lastgoodfile" ] && warn "$FUNCNAME: last good file '$lastgoodfile' does not exist" && return 1
 
+ # clean up path: remove eg ../..
+ prevpipedir=$(realpath -s $prevpipedir)
+
  # link in previous run
  find "$prevpipedir" -not -newer "$lastgoodfile" -maxdepth 1 | while read f; do
   # have we already linked in the file?
@@ -242,4 +245,13 @@ link_prev_pipe() {
   # make sure we dont write to this file
   [ -w "$f" ] && chmod -w "$f"
  done
+}
+
+## test/set permissions
+test_folder_write(){
+ [ ! -w ./ ] && warn "cannot write to $(pwd): $(ls -ld $(pwd))" && return 1
+ return 0
+}
+allow_group_write(){
+  find -maxdepth 1 -type f | xargs chmod g+w 
 }

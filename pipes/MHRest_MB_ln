@@ -26,21 +26,29 @@ function run_pipeline {
  id="$1"
  [ ! -d "$id" ] && mkdir $id
  cd $id
+ test_folder_write || return 1
 
  # find inputs from previous pipeline and link all that are useful into this subjs pipeline directory
  local prevpipedir="../../halffilter_MB/$id"
  link_prev_pipe "$prevpipedir" "$prevpipedir/.rescaling_complete" || return 1
- # we want to use our own logs
- [ -L "preprocessFunctional.log" ] && unlink preprocessFunctional.log
+
+ ## Remove links
+ # - preprocessFunctional wants to redo the ref image stuff regardless, so remove the read only links
+ # - we want to use our own logs and cmd 
+ for er in epiref* func_to_epiref.nii.gz  \
+           preprocessFunctional.log .preproc_cmd ; do 
+   [ -L "$er" ] && unlink $er
+ done
 
  # modify the stored command that is linked
- [ -L .preproc_cmd ] && unlink .preproc_cmd # remove link
  sed 's/-bandpass_filter 0.009 9999/-bandpass_filter 0.009 0.08/' $prevpipedir/.preproc_cmd > .preproc_cmd
 
  # rerun with new bandpass options
- yes| preprocessFunctional 
+ yes| preprocessFunctional  
 
  check_complete $id || return 1
+
+ allow_group_write
 
  return 0
 }
