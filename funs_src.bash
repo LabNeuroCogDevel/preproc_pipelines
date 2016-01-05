@@ -102,6 +102,7 @@ function has_finalout {
  done
  [ "$alreadyfinished" == "yes" ] && warn "# $(basename "$datasource") $(basename "$pipeline") $id already finished!" && return 0
 
+ warn "cannot find ${FINALOUT[@]} (in $(pwd))"
  return 1
 }
 
@@ -214,10 +215,10 @@ lock_time_compare() {
 # if we have one already, wait for it to clear
 # clear it if it's over 4 hours old
 check_write_lock() {
- [ -z "$1" ] && warn "$FUNCNAME need file!" && return 1
+ [ -z "$1" ] && warn "$FUNCNAME need file to lock!" && return 1
 
- while : ; do
-   lock_time_compare "$1" && break
+ lock_time_compare "$1" || echo "have lock $1, waiting for job to finish"
+ while ! lock_time_compare "$1" ; do
    sleep 10
  done
 

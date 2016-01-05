@@ -5,7 +5,7 @@ Run the fieldmap portion of preprocessFunctional
 "
 PIPE_DEPENDS=""
 PIPE_VERSION="20151215"
-FINALOUT=(".prepare_fieldmap_complete" ".fieldmap_phase" ".fieldmap_magnitude")
+FINALOUT=("mrphase/.fieldmap_phase" "mrmag/.fieldmap_magnitude")
 
 function check_complete {
  wantonlyoneid $@ || return 1
@@ -33,35 +33,26 @@ function run_pipeline {
    ! ln -s ${!fm}/MR* $fm && warn "should: rm -r $(pwd)/$fmdir" && return 1
  done
 
- fm_magnitude='mrmag/MR*'
- fm_phase='mrphase/MR*'
 
  ####
- ## UGLY HACK TO GET MICHEALS Field warping code to organize field mappings
+ ## UGLY HACK to get micheals field warping code to organize field mappings
  ####
 
  ## get MH script functions
  hmsrc=$(dirname $(which preprocessFunctional))/preproc_functions
+ # /opt/ni_tools/fmri_processing_scripts/preproc_functions/fieldmap_dicom_nifti
  # /opt/ni_tools/fmri_processing_scripts/preproc_functions/prepare_fieldmap
  source $hmsrc/helper_functions
- source $hmsrc/prepare_fieldmap
+ source $hmsrc/fieldmap_dicom_nifti
 
  ## set expected variables
- mcMats=0
  logFile="$(pwd)/FM.log"
- fm_cfg=$(dirname $hmsrc)/fmcfg/MB5_TR1.0_TE30_60slc.fmcfg
- ## and expected files
- touch mc_target_brain.nii.gz $logFile
+
+ fm_magnitude='mrmag/MR*'
+ fm_phase='mrphase/MR*'
 
  # run
- prepare_fieldmap  || echo "# preprare_fieldmap ended with error (expected)"
-
- # remove junk
- ! rm -r unwarptemps/ unwarp mc_target_brain.nii.gz && warn "# did not create expected junk files!" && return 1
- # rm .fm{phase,magnitude}_inprogress
-
- # make sure we have what we want
- [ ! -r $FINALOUT ] && echo "do not have $(pwd)/$FINALOUT" && return 1
+ fieldmap_dicom_nifti || return 1
 
  # exit successfuly
  return 0

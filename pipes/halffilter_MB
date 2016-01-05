@@ -22,6 +22,7 @@ function check_complete {
 function run_pipeline {
  id="$1"
  [ -z "$id" ] && warn "$FUNCNAME: no id given" && return 1
+ [ -z "$FM_CFG" ] && warn "$FUNCNAME: no FM_CFG in env!" && return 1
 
 
  [ ! -d "$id" ] && mkdir $id
@@ -50,7 +51,7 @@ function run_pipeline {
    -4d_slice_motion -wavelet_despike  \
    -rescaling_method 10000_globalmedian \
    -template_brain MNI_3mm    \
-   -fm_cfg clock \
+   -fm_cfg $FM_CFG \
    -fm_phase "$phase"  -fm_magnitude "$mag" \
    -nuisance_regression 6motion,wm,csf,d6motion,dwm,dcsf \
    -bandpass_filter 0.009 9999 \

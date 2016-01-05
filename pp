@@ -141,21 +141,24 @@ args_or_list_all_ids $@ | while read id; do
  # but end in error if we dont finish succesfully 
  if [ $# -eq 1 -o -n "$ONEONLY" ]; then
    runwithdepends $id  || err "could not finish $id"
+   break
+ fi
+
+ echo -e "\n### RUNNING $id ###"
 
  # only one job, dont fork
  # but only warn if we dont finish
- elif [ $MAXJOBS -eq 1 ]; then
+ if [ $MAXJOBS -eq 1 ]; then
+   echo "# running $datasource::$pipeline for $id ($(njobs)/$MAXJOBS jobs)"
    runwithdepends $id  || warn "could not finish $id"
    continue
 
  #fork: run a whole bunch at the same time
  else
    runwithdepends $id &
+   echo "# launched $datasource::$pipeline for $id ($(njobs)/$MAXJOBS jobs)"
  fi
- echo "# launched $datasource::$pipeline for $id ($(njobs)/$MAXJOBS jobs)"
 
- # if we only want to run one, end here
- [ -n "$ONEONLY" ] && break
  
  waitforjobs $MAXJOBS
 done

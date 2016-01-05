@@ -10,6 +10,9 @@ FUNCSLICEACQ="seqasc"
 
 MRROOT="/Volumes/Phillips/Raw/MRprojects/MultiModal/"
 
+# which field map config settings 
+FM_CFG=clock
+
 function list_all {
 cat <<EOF
 10637_20140304
@@ -75,6 +78,8 @@ function find_mb {
  ## special mods for ambigious subjects
  # WPC5640-08282014-11318_20140828, ambigious b/c run twice, first without rest
  [ "$id" == "11318_20140828" ] && patt="WPC5640-08282014-11318_20140828"
+ # /Volumes/Phillips/Raw/MRprojects/MultiModal//multiband/WPC5640-02282015-11342
+ [ "$id" == "11342_20150228" ] && patt="WPC5640-02282015-11342"
 
  local mbdirs=( $(find $MRROOT/multiband -type d -maxdepth 1 -iname $patt) )
  if ! checkarraycount 1 ${mbdirs[@]} ; then
@@ -83,26 +88,39 @@ function find_mb {
  fi
 
  local mbfiles=( $(find $mbdirs -maxdepth 1 -iname "$mrfile") )
- ! checkarraycount 1 ${mbfiles[@]} && warn "too many $mbdirs/$mrfiles" && return 1
- echo ${mbfiles[0]}
+ ! checkarraycount 1 ${mbfiles[@]} && warn "mb file issue: $mbdirs/$mrfile" && return 1
+ echo $mbfiles
 
 }
 
 function subj_t1 {
  wantonlyoneid $@ || return 1
+
+ ## special cases for special subjects
+ # use 19 instead of 4 #2015.02.28-12.46.17/11342_20150228/MPRAGE_axial_32ch_good_256x192.19
+ if [ "$1" == "11342_20150228" ]; then
+   echo "$MRROOT/2015.02.28-12.46.17/$1/MPRAGE_axial_32ch_good_256x192.19"
+   return 0
+
+ # use 6 isntead of 4 # 2014.12.13-11.52.34/11343_20141213/MPRAGE_axial_32ch_good_256x192.6
+ elif [ "$1" == "11343_20141213" ]; then
+   echo "$MRROOT/2014.12.13-11.52.34/11343_20141213/MPRAGE_axial_32ch_good_256x192.6"
+   return 0
+ fi
+
  subj_mr_pat $MRROOT/*/$1 'MPRAGE_axial_32ch_good_256x192*' 192 || return 1
  return 0
 }
 
 function subj_t2 {
  wantonlyoneid $@ || return 1
- find_mb $id "*ep2d_MB_rest_MB.hdr" || return 1
+ find_mb $id "*ep2d_MB_rest*_MB.hdr" || return 1
  return 0
 }
 
 function subj_ref {
  wantonlyoneid $@ || return 1
- find_mb $id "*ep2d_MB_rest_ref.hdr" || return 1
+ find_mb $id "*ep2d_MB_rest*_ref.hdr" || return 1
  return 0
 }
 

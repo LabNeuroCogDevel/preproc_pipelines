@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+source $(dirname ${BASH_SOURCE[0]})/MM_rest
+# 80 char description
+SOURCE_DESC80="Multimodal rest w/multiband and early fieldmaps(33/66) using MM_rest"
+
+# which field map config settings 
+FM_CFG=multimodal
+
+function list_all {
+cat <<EOF
+10637_20140304
+10767_20140814
+10891_20140728
+11162_20140717
+11178_20140310
+11228_20140922
+11243_20140130
+11250_20140228
+11253_20140308
+11255_20140227
+11258_20140306
+11263_20140307
+11265_20141006
+11274_20140603
+11278_20140519
+11279_20140423
+11281_20140416
+11282_20141111
+11288_20140602
+11302_20140919
+11310_20140731
+11311_20140819
+11313_20140918
+11314_20140916
+11316_20140818
+11317_20140829
+11318_20140821
+11319_20140904
+11323_20141126
+11324_20141023
+11325_20141007
+11326_20140922
+11328_20141113
+11329_20141014
+11335_20141111
+11336_20141204
+11342_20150228
+11343_20141213
+11347_20141205
+11350_20150112
+EOF
+}
+
+function subj_t1 {
+ wantonlyoneid $@ || return 1
+
+ subj_mr_pat $MRROOT/*/$1 'MPRAGE_axial_32ch_good_256x192*' 192 || return 1
+ return 0
+}
+
+# find field warping
+#  ls /Volumes/Phillips/Raw/MRprojects/MultiModal/*/11265_20141006/gre_field_mapping_new_96x90.14/MR* |wc -l #120
+#  ls /Volumes/Phillips/Raw/MRprojects/MultiModal/*/11265_20141006/gre_field_mapping_new_96x90.15/MR* |wc -l #60
+function subj_fm {
+ wantonlyoneid $@ || return 1
+ mag=$(subj_mr_pat $MRROOT/*/$1 'gre_field_*' 66)
+ [ -z "$mag" ] && return 1
+ phase=$(subj_mr_pat $MRROOT/*/$1 'gre_field_*' 33)
+ [ -z "$phase" ] && return 1
+ echo "$mag $phase"
+}
