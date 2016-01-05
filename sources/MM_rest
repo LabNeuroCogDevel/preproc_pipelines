@@ -15,18 +15,10 @@ FM_CFG=clock
 
 function list_all {
 cat <<EOF
-10637_20140304
 10767_20140814
 10891_20140728
 11162_20140717
-11178_20140310
 11228_20140922
-11243_20140130
-11250_20140228
-11253_20140308
-11255_20140227
-11258_20140306
-11263_20140307
 11265_20141006
 11274_20140603
 11278_20140519
@@ -76,10 +68,16 @@ function find_mb {
  local patt="WPC5640*$mmddyyy*$idnodate*"
 
  ## special mods for ambigious subjects
+
+ # clock instead of Y4
+ [ "$id" == "11278_20140519" ] && patt="WPC5640-05192014-11278"
+ [ "$id" == "11336_20141204" ] && patt="WPC5640-12042014-11336_20141204"
+
  # WPC5640-08282014-11318_20140828, ambigious b/c run twice, first without rest
  [ "$id" == "11318_20140828" ] && patt="WPC5640-08282014-11318_20140828"
- # /Volumes/Phillips/Raw/MRprojects/MultiModal//multiband/WPC5640-02282015-11342
+
  [ "$id" == "11342_20150228" ] && patt="WPC5640-02282015-11342"
+
 
  local mbdirs=( $(find $MRROOT/multiband -type d -maxdepth 1 -iname $patt) )
  if ! checkarraycount 1 ${mbdirs[@]} ; then
@@ -96,7 +94,8 @@ function find_mb {
 function subj_t1 {
  wantonlyoneid $@ || return 1
 
- ## special cases for special subjects
+ ## special cases for special subjects (rescans or other ambigiousness)
+
  # use 19 instead of 4 #2015.02.28-12.46.17/11342_20150228/MPRAGE_axial_32ch_good_256x192.19
  if [ "$1" == "11342_20150228" ]; then
    echo "$MRROOT/2015.02.28-12.46.17/$1/MPRAGE_axial_32ch_good_256x192.19"
@@ -105,6 +104,10 @@ function subj_t1 {
  # use 6 isntead of 4 # 2014.12.13-11.52.34/11343_20141213/MPRAGE_axial_32ch_good_256x192.6
  elif [ "$1" == "11343_20141213" ]; then
    echo "$MRROOT/2014.12.13-11.52.34/11343_20141213/MPRAGE_axial_32ch_good_256x192.6"
+   return 0
+ # use first scan, second does not have an mprage
+ elif [ "$1" == "11323_20141126" ]; then
+   echo "$MRROOT/2014.11.26-10.29.42/11323_20141126/MPRAGE_axial_32ch_good_256x192.4"
    return 0
  fi
 
