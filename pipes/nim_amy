@@ -1,0 +1,119 @@
+#!/usr/bin/bash
+PIPE_FOR="MJ"
+PIPE_DESC80="Reproduce amy conn from doi: 10.1016/j.neuroimage.2014.03.038"
+PIPE_DESC="
+Attempt to copy the pipeline from
+The development of human amygdala functional connectivity at rest from 4 to 23 years: a cross-sectional study.
+bandpass globalwm episize 1mm 
+"
+PIPE_DEPENDS=() # FS
+PIPE_VERSION="20160210"
+FINALPREFIX="nim"
+FINALOUT=("afni/${FINALPREFIX}.cleanEPI+tlrc.HEAD" ".afni_complete" )
+
+
+# this is hopefully elsewhere too. at least a nice reminder we have BRIK.gz files
+#export AFNI_COMPRESSOR="GZIP"
+export AUTOGZIP="YES"
+
+function check_complete {
+ wantonlyoneid $@ || return 1
+ has_finalout  $1 || return 1
+ return 0
+}
+
+
+function run_pipeline {
+ wantonlyoneid $@ || return 1
+ id="$1"
+
+ # make a directory for this subject
+ [ -d $id ] && rm -r $id
+ mkdir $id
+ cd $id
+
+ # TODO: if not HEAD and is dir, dimon it
+ # outher source files (not reward) will return path to e.g. MR*
+  epi="$(subj_t2 $id)"
+ anat="$(subj_t1 $id)"
+ aseg="$(subj_FS_aseg $id)"
+ # we threw warnings if any failed. make sure we dont continue
+ [ -z "$anat" -o -z "$epi" -o -z "$aseg" ] && return 1
+
+ # make sure we're gziping everything
+
+ ## start recording whats going on, and die if something goes wrong
+ #set -xe
+
+ ##### 
+ # from the paper
+ # AFNI
+ #  discarding the first 4 functional volumes to allow for BOLD signal stabilization
+ #  correction for slice acquisition dependent time shifts per volume
+ #  rigid body translation and rotation from each volume to the first volume to generate 6 within-subject motion regressors
+ #  spatial smoothing: 6-mm Gaussian kernel (FWHM) 
+ #  censor > 2.5 mm or 2.5° in any direction as compared to the first functional volume 
+ #  regs:  (15 total)
+ #     3 translational and 3 rotational,  6 backward temporal derivatives
+ #     global signal regressor, white-matter, ventricle regressors 
+ #
+ #     #### NB #### afni defaults to derive of every regs. so actually 18 regs
+ #
+ #  the mean absolute displacement value -> covariate in the regressions 
+ # normalized to percent signal change 
+ # transformed to the standard coordinate space of Talairach and Tournoux (1988) 
+ #   resampled resolution of 1 mm3
+ # band-pass filter (0.009 Hz < f < 0.08 Hz)   ### AFNI defult
+ # Timecourses for the right ventricle, white matter, and the global signal were then extracted as nuisance covariates to account for external contamination of the remaining resting-state frequencies.
+
+ set -xe
+
+ # afni likes the EPI to be in the directory the script will run from
+ 3dcopy ${epi//+orig.HEAD/+orig} epi
+
+ [ ! -r epi+orig.BRIK.gz ] &&  err "afni 3dcopy broken? $(pwd)/epi*"
+
+ # -bpassregs # should be included
+ afni_restproc.py \
+   -despike off \
+   -aseg $aseg \
+   -anat $anat \
+   -epi epi \
+   -script nim.tcsh \
+   -dest afni \
+   -prefix "$FINALPREFIX" \
+   \
+   -trcut 4 \
+   -episize 1 \
+   -tlrc \
+   -dreg \
+   -smoothfirst \
+   -smoothrad 6 \
+   -smoothtogether \
+   -bandpass \
+   -polort 0 \
+   \
+   -venterode 0 \
+   -wmerode 0 \
+   \
+   -globalwm \
+   -dvarscensor \
+   -modenorm \
+   \
+   -exec off 
+
+ 
+ #return 0
+ # -includebrain \
+
+ cd afni
+ 
+ tcsh ./nim.tcsh
+ 1dmotfile=tmp/*_restepi+orig.float_vr_motion.tcat.1D
+ [ ! -r "$1dmotfile" ] && err "cannot find 1dfile $1dmotfile"
+
+ #1d_eval  -a $1dmotfile
+
+ echo -e "$(date +%s)\n$(pwd)\t$(date)" > .afni_complete
+ return 0
+}

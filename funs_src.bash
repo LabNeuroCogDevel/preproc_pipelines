@@ -98,11 +98,14 @@ function has_finalout {
  id="$1"
  local alreadyfinished="yes"
  for fout in ${FINALOUT[@]}; do
-   [ ! -r $id/$fout ] && alreadyfinished="no" && break
+   [ -r $id/$fout ] && continue
+
+   alreadyfinished="no"
+   warn "cannot find expected finalout: $(pwd)/$id/$fout"
+   break
  done
  [ "$alreadyfinished" == "yes" ] && warn "# $(basename "$datasource") $(basename "$pipeline") $id already finished!" && return 0
 
- warn "cannot find ${FINALOUT[@]} (in $(pwd))"
  return 1
 }
 
@@ -255,4 +258,12 @@ test_folder_write(){
 }
 allow_group_write(){
   find -maxdepth 1 -type f | xargs chmod g+w 
+}
+
+file_exists_test(){
+ [ -z "$1" ] && echo "$FUNC_NAME needs a file to check" && return 1
+ f=$1
+ [ ! -r "$f" ] && warn "(${FUNC_NAME[1]}) cannot find: $f " && return 1
+ echo "$f"
+ return 0
 }

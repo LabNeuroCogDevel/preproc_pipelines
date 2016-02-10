@@ -109,6 +109,9 @@ function subj_t1 {
  elif [ "$1" == "11323_20141126" ]; then
    echo "$MRROOT/2014.11.26-10.29.42/11323_20141126/MPRAGE_axial_32ch_good_256x192.4"
    return 0
+ elif [ "$1" == "11318_20140828" ]; then
+   echo "$MRROOT/2014.08.28-14.51.01/11318_20140828/MPRAGE_axial_32ch_good_256x192.4"
+   return 0
  fi
 
  subj_mr_pat $MRROOT/*/$1 'MPRAGE_axial_32ch_good_256x192*' 192 || return 1
@@ -132,9 +135,20 @@ function subj_ref {
 #  ls /Volumes/Phillips/Raw/MRprojects/MultiModal/*/11265_20141006/gre_field_mapping_new_96x90.15/MR* |wc -l #60
 function subj_fm {
  wantonlyoneid $@ || return 1
- mag=$(subj_mr_pat $MRROOT/*/$1 'gre_field_*' 120)
+
+ local path=($MRROOT/*/$1)
+ warn "$FUNCNAME: looking for ${path[@]}"
+
+ # 11323_20141126 
+ # Run 4 - stopped scan 3/4 way thru bc sub pressed alarm ball accidentally. Siemens comp froze about 1 min into rest, had to reboot exam app and rerun loc, BOLD scout, and rest. Sub performed okay, required frequent breaks
+ [ "$1" == "11323_20141126" ] && path=("$MRROOT/2014.11.26-10.29.42/11323_20141126")
+ 
+
+ [ ${#path[@]} -gt 1 ] && warn "$FUNCNAMME: $1 has too many possible paths (${#path[@]}): ${path[@]}" && return 1
+ 
+ mag=$(subj_mr_pat $path 'gre_field_*' 120)
  [ -z "$mag" ] && return 1
- phase=$(subj_mr_pat $MRROOT/*/$1 'gre_field_*' 60)
+ phase=$(subj_mr_pat $path 'gre_field_*' 60)
  [ -z "$phase" ] && return 1
  echo "$mag $phase"
 }

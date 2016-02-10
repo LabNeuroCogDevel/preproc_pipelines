@@ -6,15 +6,27 @@ function list_all {
 }
 
 function subj_t1 {
- wantonlyoneid $@
+ wantonlyoneid $@ || return 1
+ file_exists_test "$SUBJECTS_DIR/$1/mri/T1.mgz"
+}
+
+function subj_MRT1 {
+ wantonlyoneid $@ || return 1
+ #subj_mr_pat $MRROOT/$1 'axial_mprage_256x208*' 176 || return 1
+}
+
+# segemention mask from freesurfer
+function subj_FS_aseg {
+ wantonlyoneid $@ || return 1
+ file_exists_test "$SUBJECTS_DIR/$1/mri/aseg.mgz"
 }
 
 function subj_t2 {
- wantonlyoneid $@
+ wantonlyoneid $@ || return 1
 }
 function subj_ref {
- wantonlyoneid $@
+ wantonlyoneid $@ || return 1
 }
 function subj_physio {
- wantonlyoneid $@
+ wantonlyoneid $@ || return 1
 }

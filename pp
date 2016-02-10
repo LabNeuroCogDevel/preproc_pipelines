@@ -24,7 +24,7 @@ function listdir {
   find $srcdir -type f -not -name template -not -name '*.swp'| while read f; do
     date=$(sed -n 's/"//g;s/.*_VERSION=//p' $f)
     desc=$(sed -n 's/"//g;s/.*DESC80=//p' $f)
-    echo -e "$(basename $f):\t$date\t$desc"
+    echo -e "$(basename $f)\t$date\t$desc"
   done | column -ts'	'|sed 's/^/    /' |sort -k2,2nr
 }
 function list_pipeandsource {
@@ -114,6 +114,8 @@ function runwithdepends {
    local lockfile=$SCRIPTDIR/locks/$(basename $datasource)_$(basename $pipeline)_$id
    check_write_lock $lockfile
 
+   ### THIS IS IT: RUN THE PIPELINE
+   # on error, remove the lock
    if ! run_pipeline $id; then 
      warn "did not succesfully finish run_pipeline $id" 
      rm $lockfile

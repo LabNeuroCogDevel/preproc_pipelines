@@ -1,0 +1,274 @@
+#!/usr/bin/bash
+PIPE_FOR="MJ"
+PIPE_DESC80="RewardRest: afni with wavelet. regress WM and GlobalSignal"
+PIPE_DESC="
+This pipeline processes rest data for Reward Rest. Based on the output of afni_restproc.py
+with wavlet injected
+wavlet    yes
+regs      wm,globalsignal
+with DVARS+FD censor (DVARS post wavelet)
+"
+PIPE_DEPENDS=() # FS
+PIPE_VERSION="20160121"
+FINALPREFIX="WavWMGSR"
+FINALOUT=("${FINALPREFIX}.cleanEPI+tlrc.HEAD" ".afni_complete" )
+
+
+function check_complete {
+ wantonlyoneid $@ || return 1
+ has_finalout  $1 || return 1
+ return 0
+}
+
+# motion file has a few different names
+set_motion() {
+    # first arg is likely ${basename}${suffix} eg. restepi.float
+    motion_file=${1}_vr_motion
+    # motion file output changes over afni version
+    # eg. 20160121 on rhea
+    #restepi.float_tsh_vr_motion.1D
+    [ ! -r "${motion_file}.1D" ] && motion_file="${1}_tsh_vr_motion"
+    [ ! -r "${motion_file}.1D" ] && warn "cannot find moiton file: $pwd/$motion_file.1D" && return 1
+    echo $motion_file
+}
+
+function run_pipeline {
+ wantonlyoneid $@ || return 1
+ id="$1"
+
+ # make a directory for this subject
+ [ -d $id ] && rm -r $id
+ mkdir $id
+ cd $id
+
+ # TODO: if not HEAD and is dir, dimon it
+ # outher source files (not reward) will return path to e.g. MR*
+ epi="$(subj_t2 $id)"
+
+ anat="$(file_exists_test "$SUBJECTS_DIR/$id/mri/T1.mgz")"
+ aseg="$(file_exists_test "$SUBJECTS_DIR/$id/mri/aseg.mgz")"
+ # we threw warnings if any failed. make sure we dont continue
+ [ -z "$anat" -o -z "$epi" -o -z "$aseg" ] && return 1
+
+ # make sure we're gziping everything
+ export AFNI_COMPRESSOR="GZIP"
+
+ ## start recording whats going on, and die if something goes wrong
+ set -xe
+ 
+ #Gather files
+ mkdir tmp
+ cd tmp
+
+    
+ ## Begin
+ basename=restepi
+ ext=+orig
+ 
+ # we dont have to do everything if we already have
+ # some of it completed
+ # -- we can use the pipeline that did not use GSR
+ restartAtDIR="/data/Luna2/Reward/Rest/$id/afni_restproc/wavelet_restoretmp/tmp"
+ lastgoodfile="$restartAtDIR/restepi.float_tlrc_al.tcat.norm.blur.wave_despike.bpass.clean+tlrc.BRIK.gz"
+
+ # can link
+ if [ -r "$lastgoodfile" ]; then
+   echo "STARTING MIDWAY: linking anything not newer than  $lastgoodfile"
+   link_prev_pipe "$restartAtDIR" "$lastgoodfile"
+   suffix=".float_tlrc_al.tcat.norm.blur.wave_despike.bpass.clean"
+   ext="+tlrc"
+   curEPI=${basename}${suffix}${ext}
+   motion_file=$(set_motion $basename.float ) || return 1
+   # we probably tcated the motion file already too
+   motion_file=${motion_file}.tcat
+
+   # need WM mask
+   3dmaskave -q -mask mask.WM.resample.erode+tlrc $curEPI > mask.WM.resample.erode.reg.1D
+   1d_tool.py -derivative -infile mask.WM.resample.erode.reg.1D -write mask.WM.resample.erode.reg.backdif.1D
+   1dBandpass -nodetrend 0.009 0.08 mask.WM.resample.erode.reg.1D > mask.WM.resample.erode.reg.bpass.1D
+   1dBandpass -nodetrend 0.009 0.08 mask.WM.resample.erode.reg.backdif.1D > mask.WM.resample.erode.reg.backdif.bpass.1D
+
+   # next up, 3dTfitter 
+
+ # cannot link
+ else
+    echo "STARTING FRESH: cannot find $lastgoodfile"
+    echo "copy anat ($anat) and aseg ($asg)"
+    cp $anat .
+    #cp $epi .
+    cp $aseg .
+    
+    #Get into BRIK format
+    for mgz_file in `ls *.mgz`; do
+    	mri_convert -it mgz -ot nii -i $mgz_file -o "${mgz_file%.mgz}.nii"
+    done
+    
+    for nii_file in `ls *.nii*`; do
+    	3dcopy $nii_file "${nii_file%.nii*}"
+    done
+    
+    3dcopy $epi restepi
+    curEPI=restepi+orig
+    T1=T1+orig
+    aseg=aseg+orig
+    
+    #Convert to float to avoid scaling misfit errors
+    3dcalc -a $curEPI -expr 'a' -prefix $basename.float -float
+    suffix=.float
+    curEPI=${basename}${suffix}${ext}
+    
+    #Talairach all input datasets
+    @auto_tlrc -base MNI_caez_N27+tlrc -input $T1
+    align_epi_anat.py -epi $curEPI -anat $T1 -epi_base 0 -epi2anat -tlrc_apar T1+tlrc -master_tlrc 3
+    @auto_tlrc -onewarp -apar T1+tlrc -rmode NN -input $aseg
+    # 20151027 WF: afni's changed output of motion files from auto_tlrc to
+    # restepi.float_tsh_vr_motion.tcat.1D  restepi.float_vr_motion.1D
+    #motion_file=${basename}${suffix}_tsh_vr_motion
+    motion_file=$(set_motion ${basename}${suffix}) || return 1
+
+    suffix=${suffix}_tlrc_al
+    ext=+tlrc
+    curEPI=${basename}${suffix}${ext}
+    aseg=aseg+tlrc
+    
+    
+    #Remove first TRs from EPI, motion params, and any user supplied regressors
+    3dTcat -prefix ${basename}${suffix}.tcat ${curEPI}'[4..$]'
+    1dcat ${motion_file}.1D'{4..$}' > ${motion_file}.tcat.1D
+    suffix=${suffix}.tcat
+    curEPI=${basename}${suffix}${ext}
+    motion_file=${motion_file}.tcat
+    
+    #Extract brain mask
+    3dAutomask -prefix mask.brain T1+tlrc
+    3dresample -master $curEPI -rmode NN -inset mask.brain+tlrc -prefix mask.brain.resample
+    
+    #Normalize based on global mode
+    3dTstat -mean -prefix ${basename}${suffix}.mean $curEPI
+    3dhistog -nbins 100 -doall -omit 0 -mask mask.brain.resample+tlrc $curEPI > ${basename}${suffix}.hist.1D
+    1dTsort -dec -col 1 ${basename}${suffix}.hist.1D > ${basename}${suffix}.hist.sort.1D
+    3dcalc -a $curEPI -b mask.brain.resample+tlrc -expr "(a / `1dcat ${basename}${suffix}.hist.sort.1D'[0]{0}'`) * 1000 * b" -prefix ${basename}${suffix}.norm
+    suffix=${suffix}.norm
+    curEPI=${basename}${suffix}${ext}
+    
+    #Prepare white matter regressor mask
+    #  ## White Matter too
+    #  space=tlrc
+    #  3dcalc -prefix mask.WM   -a $aseg -expr 'amongst(a,2,7,41,46,77,78,79)'            
+    #  3dresample -master $curEPI -rmode NN -inset mask.WM+$space -prefix mask.WM.resample
+    #  # erode
+    #  3dcalc -prefix mask.WM.resample.erode+$space -a mask.WM.resample+$space -b a+i -c a-i -d a+j -e a-j -f a+k -g a-k -expr 'a*(1-amongst(0,b,c,d,e,f,g))'
+    #  # regressors
+    #  3dmaskave -overwrite -q -mask mask.WM.resample.erode+$space $curEPI >  stimuli/mask.WM.resample.erode.reg.1D
+    #  1d_tool.py -overwrite -derivative -infile stimuli/mask.WM.resample.erode.reg.1D -write stimuli/mask.WM.resample.erode.reg.backdif.1D
+    #  
+    3dcalc -a $aseg -prefix mask.WM -expr 'equals(a,2)+equals(a,7)+equals(a,41)+equals(a,46)+equals(a,251)+equals(a,252)+equals(a,253)+equals(a,254)+equals(a,255)+equals(a,16)'
+    3dresample -master $curEPI -rmode NN -inset mask.WM+tlrc -prefix mask.WM.resample
+    3dcalc -a mask.WM.resample+tlrc -b a+i -c a-i -d a+j -e a-j -f a+k -g a-k -expr 'a*(step(step(b) + step(c) + step(d) + step(e) + step(f) + step(g) - 5))' -prefix mask.WM.resample.erode
+    
+    #Extract ventricle regressor
+    3dcalc -a $aseg -prefix mask.vent -expr 'equals(a,4)+equals(a,43)'
+    3dresample -master $curEPI -rmode NN -inset mask.vent+tlrc -prefix mask.vent.resample
+    3dcalc -a mask.vent.resample+tlrc -b a+i -c a-i -d a+j -e a-j -f a+k -g a-k -expr 'a*(step(step(b) + step(c) + step(d) + step(e) + step(f) + step(g) - 4))' -prefix mask.vent.resample.erode
+    
+    #Prepare blurring mask with GM=1, NG=2
+    3dcalc -a mask.brain.resample+tlrc -b mask.WM.resample.erode+tlrc -c mask.vent.resample.erode+tlrc -prefix mask.grey.nongrey -expr 'a + b + c'
+    3dcalc -a mask.grey.nongrey+tlrc -expr 'equals(a, 1)' -prefix mask.grey
+    
+    #Smooth timeseries
+    3dBlurInMask -input $curEPI -FWHM 6 -Mmask mask.brain.resample+tlrc -prefix ${basename}${suffix}.blur
+    suffix=${suffix}.blur
+    curEPI=${basename}${suffix}${ext}
+    
+    #Wavelet despike
+    3dAFNItoNIFTI $curEPI
+    matlab -nodisplay -r "addpath(genpath('/data/Luna1/ni_tools/BrainWavelet/'));try; WaveletDespike('restepi.float_tlrc_al.tcat.norm.blur.nii.gz','restepi.float_tlrc_al.tcat.norm.blur.wave_despike');end;quit;"
+    suffix=${suffix}.wave_despike
+    3dcopy ${basename}${suffix}_wds.nii.gz ${basename}${suffix}
+    3drefit -view 'tlrc' -space 'MNI' ${basename}${suffix}+orig
+    curEPI=${basename}${suffix}${ext}
+    
+    
+    #WF20150216 -- cacluate GSR, but not used 
+    #WF20160121 -- used now (for compare)
+    
+    #Extract regressors from masks
+    3dmaskave -q -mask mask.vent.resample.erode+tlrc $curEPI > mask.vent.resample.erode.reg.1D
+    3dmaskave -q -mask mask.brain.resample+tlrc $curEPI > mask.brain.resample.reg.1D
+    3dmaskave -q -mask mask.WM.resample.erode+tlrc $curEPI > mask.WM.resample.erode.reg.1D
+    
+    #Differentiate regressors
+    1d_tool.py -derivative -infile mask.vent.resample.erode.reg.1D -write mask.vent.resample.erode.reg.backdif.1D
+    1d_tool.py -derivative -infile mask.brain.resample.reg.1D -write mask.brain.resample.reg.backdif.1D
+    1d_tool.py -derivative -infile mask.WM.resample.erode.reg.1D -write mask.WM.resample.erode.reg.backdif.1D
+    1d_tool.py -derivative -infile $motion_file.1D -write ${motion_file}.backdif.1D
+    
+    
+    #Bandpass filter regressors
+    
+    1dBandpass -nodetrend 0.009 0.08 mask.vent.resample.erode.reg.1D > mask.vent.resample.erode.reg.bpass.1D
+    1dBandpass -nodetrend 0.009 0.08 mask.brain.resample.reg.1D > mask.brain.resample.reg.bpass.1D
+    1dBandpass -nodetrend 0.009 0.08 mask.WM.resample.erode.reg.1D > mask.WM.resample.erode.reg.bpass.1D
+    1dBandpass -nodetrend 0.009 0.08 ${motion_file}.1D > ${motion_file}.bpass.1D
+    
+    1dBandpass -nodetrend 0.009 0.08 mask.vent.resample.erode.reg.backdif.1D > mask.vent.resample.erode.reg.backdif.bpass.1D
+    1dBandpass -nodetrend 0.009 0.08 mask.WM.resample.erode.reg.backdif.1D > mask.WM.resample.erode.reg.backdif.bpass.1D
+    1dBandpass -nodetrend 0.009 0.08 mask.brain.resample.reg.backdif.1D > mask.brain.resample.reg.backdif.bpass.1D
+    1dBandpass -nodetrend 0.009 0.08 ${motion_file}.backdif.1D  > ${motion_file}.backdif.bpass.1D
+    
+    #Bandpass filter EPI
+    3dBandpass -nodetrend -prefix ${basename}${suffix}.bpass.clean 0.009 0.08 $curEPI
+    suffix=${suffix}.bpass.clean
+    curEPI=${basename}${suffix}${ext}
+    
+ fi   
+ 
+ #Regress out nuisance signals
+ #WF20150216 -- rm'ed mask.brain.resample.reg.backdif.bpass.1D mask.brain.resample.reg.bpass.1D 
+ #WF20160121 -- added back  
+ 3dTfitter -polort 0 -RHS $curEPI -LHS mask.brain.resample.reg.backdif.bpass.1D mask.brain.resample.reg.bpass.1D mask.vent.resample.erode.reg.bpass.1D mask.WM.resample.erode.reg.bpass.1D ${motion_file}.bpass.1D ${motion_file}.backdif.bpass.1D -prefix ${basename}${suffix}.regcoefs -fitts ${basename}${suffix}.fitts
+ 3dcalc -a $curEPI -b ${basename}${suffix}.fitts+tlrc -expr 'a - b' -prefix ${basename}${suffix}.regressed -float
+ suffix=${suffix}.regressed
+ curEPI=${basename}${suffix}${ext}
+ 
+ #Create FD and DVARS based censor file
+ 
+ #create FD censor
+ 1d_tool.py -infile ${motion_file}.1D -derivative -write ${motion_file}.deltamotion.1D
+ 1deval -a ${motion_file}.deltamotion.1D'[0]' -b ${motion_file}.deltamotion.1D'[1]' -c ${motion_file}.deltamotion.1D'[2]' -d ${motion_file}.deltamotion.1D'[3]' -e ${motion_file}.deltamotion.1D'[4]' -f ${motion_file}.deltamotion.1D'[5]' -expr '100*sind(abs(a)/2) + 100*sind(abs(b)/2) + 100*sind(abs(c)/2) + abs(d) + abs(e) + abs(f)' > ${motion_file}.deltamotion.FD.1D
+ 1d_tool.py -infile ${motion_file}.deltamotion.FD.1D -extreme_mask -1 0.5 -write ${motion_file}.deltamotion.FD.extreme0.5.1D
+ 1deval -a ${motion_file}.deltamotion.FD.extreme0.5.1D -expr 'not(a)' > ${motion_file}.deltamotion.FD.moderate0.5.1D
+ 1deval -a ${motion_file}.deltamotion.FD.moderate0.5.1D -b ${motion_file}.deltamotion.FD.moderate0.5.1D'{1..$,0}' -expr 'ispositive(a + b - 1)' > ${motion_file}.deltamotion.FD.moderate0.5.n.1D
+ 1deval -a ${motion_file}.deltamotion.FD.moderate0.5.n.1D -b ${motion_file}.deltamotion.FD.moderate0.5.n.1D'{0,0..$}' -expr 'ispositive(a + b - 1)' > ${motion_file}.deltamotion.FD.moderate0.5.n.n.1D
+ 1deval -a ${motion_file}.deltamotion.FD.moderate0.5.n.n.1D -b ${motion_file}.deltamotion.FD.moderate0.5.n.n.1D'{0,0..$}' -expr 'ispositive(a + b - 1)' > ${motion_file}.deltamotion.FD.moderate0.5.n.n.n.1D
+ 
+ #create DVARS censor
+ 3dcalc -a $curEPI -b 'a[0,0,0,-1]' -expr '(a - b)^2' -prefix ${basename}${suffix}.backdif2
+ 3dmaskave -mask mask.brain.resample+tlrc -quiet ${basename}${suffix}.backdif2+tlrc > ${basename}${suffix}.backdif2.avg.1D
+ 1deval -a ${basename}${suffix}.backdif2.avg.1D -expr 'sqrt(a)'  > ${basename}${suffix}.backdif2.avg.dvars.1D
+ 1d_tool.py -infile ${basename}${suffix}.backdif2.avg.dvars.1D -extreme_mask -1 5 -write ${basename}${suffix}.backdif2.avg.dvars.extreme5.1D
+ 1deval -a ${basename}${suffix}.backdif2.avg.dvars.extreme5.1D -expr 'not(a)' > ${basename}${suffix}.backdif2.avg.dvars.moderate5.1D
+ 1deval -a ${basename}${suffix}.backdif2.avg.dvars.moderate5.1D -b ${basename}${suffix}.backdif2.avg.dvars.moderate5.1D'{1..$,0}' -expr 'ispositive(a + b - 1)' > ${basename}${suffix}.backdif2.avg.dvars.moderate5.n.1D
+ 1deval -a ${basename}${suffix}.backdif2.avg.dvars.moderate5.n.1D -b ${basename}${suffix}.backdif2.avg.dvars.moderate5.n.1D'{0,0..$}' -expr 'ispositive(a + b - 1)' > ${basename}${suffix}.backdif2.avg.dvars.moderate5.n.n.1D
+ 1deval -a ${basename}${suffix}.backdif2.avg.dvars.moderate5.n.n.1D -b ${basename}${suffix}.backdif2.avg.dvars.moderate5.n.n.1D'{0,0..$}' -expr 'ispositive(a + b - 1)' > ${basename}${suffix}.backdif2.avg.dvars.moderate5.n.n.n.1D
+ 3dTstat -mean -stdev -prefix ${basename}${suffix}.backdif2.avg.dvars.stats.1D ${basename}${suffix}.backdif2.avg.dvars.1D\'
+ 1deval -a ${motion_file}.deltamotion.FD.moderate0.5.n.n.n.1D -b ${basename}${suffix}.backdif2.avg.dvars.moderate5.n.n.n.1D -expr 'and(a, b)' > powerCensorUnion.1D
+ 1deval -a ${motion_file}.deltamotion.FD.moderate0.5.n.n.n.1D -b ${basename}${suffix}.backdif2.avg.dvars.moderate5.n.n.n.1D -expr 'or(a, b)' > powerCensorIntersection.1D
+ 
+ #Apply censor file
+ afni_restproc.py -apply_censor $curEPI powerCensorIntersection.1D ${basename}${suffix}.censor
+ suffix=${suffix}.censor
+ curEPI=${basename}${suffix}${ext}
+ 
+ #Copy results, possibly talairaching them
+ 3dcopy T1+tlrc ../${FINALPREFIX}.anat
+ cp powerCensorIntersection.1D ../${FINALPREFIX}.censor.1D
+ 3dcopy $curEPI ../${FINALPREFIX}.cleanEPI
+ 3dcopy mask.vent.resample.erode+tlrc ../${FINALPREFIX}.mask.vent
+ 3dcopy mask.WM.resample.erode+tlrc ../${FINALPREFIX}.mask.wm
+ 3dcopy mask.grey+tlrc ../${FINALPREFIX}.mask.gm
+ 3dcopy mask.brain.resample+tlrc ../${FINALPREFIX}.mask.brain
+
+ echo -e "$(date +%s)\n$(pwd)\t$(date)" > ../.afni_complete
+ return 0
+}

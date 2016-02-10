@@ -1,0 +1,50 @@
+EMACS NOTE
+
+with cursor over a file name: 
+ Alt+x ffap [enter]  # to go to the file under the cursor (find file at point)
+ Crl+x b    [enter]  # jump back
+
+
+OVERVIEW
+
+useful functions (e.g. file_exists_test ) in 
+  funs_src.bash
+
+settings and functions (eg subj_t1 ) for reward rest are in 
+  sources/reward_rest
+
+new pipeline for nim_amy is a copy of pipes/template and is in
+  pipes/nim_amy
+
+
+the master program (really just a script) is
+  pp
+
+
+to use it with our data source and pipeline, just for one person
+
+  ONEONLY=1 ./pp reward_rest nim_amy
+
+we can remove the "ONEONLY=1" when we are ready run on all subjects
+
+
+
+EDITING PIPELINE
+
+pp looks inside the pipeline script to run the functions
+  run_pipeline 
+  check_complete
+
+That is, our job in making a new pipeline is to define run_pipeline.
+
+We can also make a check_complete to validate that run_pipeline finished correctly, 
+ but the template's version is probably sufficent.
+
+
+A lot of the work for writing and customizing run_pipeline is already done for us!
+sources/reward_rest defines some useful functions we'll want to use.  Namely,
+  subj_t1 "$id"       # returns where t1.mgz   is for subject with $id
+  subj_FS_aseg "$id"  # returns where aseg.mgz is for subject with $id
+  subj_t2 "$id"       # returns where the subjects epi is
+
+
