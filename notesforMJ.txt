@@ -2,8 +2,9 @@ EMACS NOTE
 
 with cursor over a file name: 
  Alt+x ffap [enter]  # to go to the file under the cursor (find file at point)
- Crl+x b    [enter]  # jump back
-
+ Crl+x b    [enter]  # jump back to this buffer
+ 
+ Ctr+g               # panic keys, abort any command string if you hit a bad key combo 
 
 OVERVIEW
 
@@ -35,16 +36,23 @@ pp looks inside the pipeline script to run the functions
   run_pipeline 
   check_complete
 
-That is, our job in making a new pipeline is to define run_pipeline.
+That is, our job in making a new pipeline is to define the function
+  run_pipeline 
+inside our new pipeline file
+  pipes/nim_amy
 
-We can also make a check_complete to validate that run_pipeline finished correctly, 
+We can also customize check_complete to validate that run_pipeline finished correctly, 
  but the template's version is probably sufficent.
 
 
-A lot of the work for writing and customizing run_pipeline is already done for us!
+A lot of the work for writing and customizing the run_pipeline function of our pipeline is already done for us!
+
 sources/reward_rest defines some useful functions we'll want to use.  Namely,
   subj_t1 "$id"       # returns where t1.mgz   is for subject with $id
   subj_FS_aseg "$id"  # returns where aseg.mgz is for subject with $id
   subj_t2 "$id"       # returns where the subjects epi is
 
+
+The big part of what we need to do is get afni_restproc.py to run inside run_pipeline. 
+We should also modify all the bash variables at the top that contain inforamation about what the pipeline does.
 
