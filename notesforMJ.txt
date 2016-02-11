@@ -26,9 +26,17 @@ to use it with our data source and pipeline, just for one person
 
   ONEONLY=1 ./pp reward_rest nim_amy
 
-we can remove the "ONEONLY=1" when we are ready run on all subjects
+we can also test on one (or more) specific subject like
 
+  ./pp reward_rest nim_amy 10153_20100604
 
+and finally we can run on all subjects
+
+   tmux
+   ./pp reward_rest nim_amy
+
+Note: we probably want to run this in tmux.
+On all subjects, it will take a log time.  we dont want it to die because we closed the window
 
 EDITING PIPELINE
 
@@ -56,3 +64,5 @@ sources/reward_rest defines some useful functions we'll want to use.  Namely,
 The big part of what we need to do is get afni_restproc.py to run inside run_pipeline. 
 We should also modify all the bash variables at the top that contain inforamation about what the pipeline does.
 
+TESTING
+./pp reward_rest nim_amy 
