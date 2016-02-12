@@ -22,21 +22,7 @@ the master program (really just a script) is
   pp
 
 
-to use it with our data source and pipeline, just for one person
 
-  ONEONLY=1 ./pp reward_rest nim_amy
-
-we can also test on one (or more) specific subject like
-
-  ./pp reward_rest nim_amy 10153_20100604
-
-and finally we can run on all subjects
-
-   tmux
-   ./pp reward_rest nim_amy
-
-Note: we probably want to run this in tmux.
-On all subjects, it will take a log time.  we dont want it to die because we closed the window
 
 EDITING PIPELINE
 
@@ -50,19 +36,38 @@ inside our new pipeline file
   pipes/nim_amy
 
 We can also customize check_complete to validate that run_pipeline finished correctly, 
- but the template's version is probably sufficent.
+ but default copied from the template is probably sufficent.
 
 
 A lot of the work for writing and customizing the run_pipeline function of our pipeline is already done for us!
-
 sources/reward_rest defines some useful functions we'll want to use.  Namely,
   subj_t1 "$id"       # returns where t1.mgz   is for subject with $id
   subj_FS_aseg "$id"  # returns where aseg.mgz is for subject with $id
   subj_t2 "$id"       # returns where the subjects epi is
 
 
-The big part of what we need to do is get afni_restproc.py to run inside run_pipeline. 
+While the biggest part of what we need to do is get afni_restproc.py to run inside run_pipeline,
+the most time consuming is consitantly changing the output of afni_restproc.py to match our modifications to AFNI's pipeline (e.g. custom censoring)
+
 We should also modify all the bash variables at the top that contain inforamation about what the pipeline does.
 
-TESTING
-./pp reward_rest nim_amy 
+
+
+TESTING AND RUNNING
+
+to use pp with our data source (reward_rest) and pipeline (nim_amy), just for one person
+
+  ONEONLY=1 ./pp reward_rest nim_amy
+
+we can also test on one (or more) specific subject like
+
+  ./pp reward_rest nim_amy 10153_20100604
+
+and finally we can run on all subjects
+
+   tmux
+   ./pp reward_rest nim_amy
+
+We probably want to run this in tmux.
+On all subjects, it will take a log time.  Without tmux, the process is likely to die because the connected terminal was closed or disconnected.
+
