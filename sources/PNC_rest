@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+# 80 char description
+SOURCE_DESC80="PNC rest data"
+
+SUBJECTS_DIR="/Volumes/Phillips/Maria/PNC/Freesurfer/"
+DICOM_PAT="*.dcm"
+
+FUNCTR="3"
+FUNCSLICEACQ="seqasc"
+
+MRROOT="/Volumes/Phillips/Maria/PNC/raw_data"
+
+DCMRECONDIR="/Volumes/Phillips/Maria/PNC/rest_fMRI/"
+
+
+function subj_t1 {
+ wantonlyoneid $@ || return 1
+
+ ## special cases for special subjects (rescans or other ambigiousness)
+ # none yet
+
+ # do not use original, use FS warped -- so we can use aseg
+ #subj_mr_pat $MRROOT/$1 'axial_mprage_256x208*' 176 || return 1
+
+ # FS T1
+ file_exists_test "$SUBJECTS_DIR/$1/mri/T1.mgz"
+}
+
+# segemention mask from freesurfer
+function subj_FS_aseg {
+ wantonlyoneid $@ || return 1
+ file_exists_test "$SUBJECTS_DIR/$1/mri/aseg.mgz"
+}
+
+function subj_t2 {
+ wantonlyoneid $@ || return 1
+ # would reconstruct from
+restdcmdir=$(subj_mr_pat $MRROOT/$1/FMRI_BOLD_rest 'Dicoms' 124) || return 1
+[ ! -d $DCMRECONDIR/$1 ] && mkdir -p $DCMRECONDIR/$1
+oldwd=$(pwd)
+cd $DCMRECONDIR/$1
+
+ [ ! -r  "$DCMRECONDIR/$1/${1}_restepi+orig.HEAD" ] && 
+Dimon -infile_prefix $restdcmdir/ \
+        -GERT_Reco \
+        -dicom_org \
+        -sort_by_acq_time \
+        -gert_create_dataset \
+        -gert_to3d_prefix ${1}_restepi \
+        -quit
+cd $oldwd
+# use what we've already made
+ file_exists_test "$DCMRECONDIR/$1/${1}_restepi+orig.HEAD"
+}
+
+function subj_MRT1 {
+ wantonlyoneid $@ || return 1
+ subj_mr_pat $MRROOT/$1/T1_3DAXIAL 'Dicoms' 160 || return 1
+}
+
+
+# have FS, shouldn't need to do this here
+#function subj_aseg {
+# wantonlyoneid $@ || return 1
+# file_exists_test "$SUBJECTS_DIR/$1/mri/aseg.mgz"
+#}
+
+function subj_physio {
+ wantonlyoneid $@ || return 1
+ warn "PHYSIO NOT IMPLEMENTED ${BASH_SOURCE}"
+ return 0
+
+ # physiofile="$(find $physioDir/$SUBJECT/$VISIT/ -iname '*rest*RetroTS.slibase.1D'|tail -n1)"
+}
+
+
+
+
+# all we care about
+function list_all {
+ls -d /Volumes/Phillips/Maria/PNC/raw_data/6* | cut -d / -f 7
+}
