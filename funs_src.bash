@@ -53,8 +53,11 @@ function findpattdcmcnt  {
 
  [ ! -d "$root" ] && warn "$FUNCNAME needs a directory not $root (${FUNCNAME[@]})" && return 1
 
+ # default to dicom pattern as MR* (alternative might be *.dcm)
+ [ -z "$DICOM_PAT" ] && DICOM_PAT='MR*'
+
  find $root -maxdepth 1 -iname "$pat" | while read d; do
-   cnt=$(ls $d/MR* | wc -l)
+   cnt=$(ls $d/$DICOM_PAT | wc -l)
    [ $cnt -ne $dicomcnt ] && warn "# $d has $cnt MR*s, not $dicomcnt" && continue
    echo $d
  done
@@ -126,7 +129,7 @@ function subj_mr_pat {
 
  mrdirs=($(findpattdcmcnt "$path" "$patt" "$cnt") )
  if ! checkarraycount 1 ${mrdirs[@]} ; then
-   warn "nothing fits $path/$patt/MR*"  
+   warn "nothing fits $path/$patt/$DICOM_PAT"  
    return 1
  fi
  echo $mrdirs
