@@ -70,6 +70,29 @@ function checkarraycount {
  return 0
 }
 
+## specify a specfic mrfolder to use for a subject
+## will see if first 2 arguments match to echo folder specifed by 3rd argument
+# return 1 if no match
+# return 0 and echo dir of match
+## in subj_t1 
+## pick_mrfolder $1 "10905_20111212" axial_mprage_G2_256x192.18 && return 0
+pick_mrfolder() {
+ haveid=$1
+ searchid=$2
+ dirname=$3
+ [ -z $dirname ] && warn "$FUNC_NAME: bad call. need 3 arguemnts got $@" && return 1
+ if [ "$haveid" == $searchid ];then
+  returndir="$MRROOT/$searchid/$dirname" 
+  warn "# $searchid manually set directory to '$returndir'"
+  [ ! -r "$returndir" ] && warn "explicit dir ('$returndir') DNE!" && return 1
+  echo "$returndir"
+  return 0
+ fi
+
+ return 1
+}
+
+
 
 ## bash job control
 function njobs {
@@ -270,3 +293,4 @@ file_exists_test(){
  echo "$f"
  return 0
 }
+
