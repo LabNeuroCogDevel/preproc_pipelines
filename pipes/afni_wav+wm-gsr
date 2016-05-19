@@ -28,7 +28,7 @@ set_motion() {
     # eg. 20160121 on rhea
     #restepi.float_tsh_vr_motion.1D
     [ ! -r "${motion_file}.1D" ] && motion_file="${1}_tsh_vr_motion"
-    [ ! -r "${motion_file}.1D" ] && warn "cannot find moiton file: $pwd/$motion_file.1D" && return 1
+    [ ! -r "${motion_file}.1D" ] && warn "cannot find moiton file: $(pwd)/$motion_file.1D; have: $(ls *motion*1[Dd])" && return 1
     echo $motion_file
 }
 
@@ -57,7 +57,7 @@ function run_pipeline {
  set -xe
  
  #Gather files
- mkdir tmp
+ ! mkdir tmp && echo "bad permissions on $(pwd), cannot create tmp" >&2 && return 1
  cd tmp
 
     
@@ -116,11 +116,16 @@ function run_pipeline {
     3dcalc -a $curEPI -expr 'a' -prefix $basename.float -float
     suffix=.float
     curEPI=${basename}${suffix}${ext}
+
+    #20160317- add in BET becuase @auto_tlrc was not doing a good job skull stripping
+    bet T1.nii T1_bet.nii -R -f 0.5
+    3dcopy T1_bet.nii T1_bet+orig 
     
     #Talairach all input datasets
-    @auto_tlrc -base MNI_caez_N27+tlrc -input $T1
-    align_epi_anat.py -epi $curEPI -anat $T1 -epi_base 0 -epi2anat -tlrc_apar T1+tlrc -master_tlrc 3
-    @auto_tlrc -onewarp -apar T1+tlrc -rmode NN -input $aseg
+    @auto_tlrc -base MNI_caez_N27+tlrc -input T1_bet+orig -no_ss
+    T1_at=T1_bet+tlrc
+    align_epi_anat.py -epi $curEPI -anat $T1 -epi_base 0 -epi2anat -tlrc_apar $T1_at -master_tlrc 3
+    @auto_tlrc -onewarp -apar $T1_at -rmode NN -input $aseg
     # 20151027 WF: afni's changed output of motion files from auto_tlrc to
     # restepi.float_tsh_vr_motion.tcat.1D  restepi.float_vr_motion.1D
     #motion_file=${basename}${suffix}_tsh_vr_motion
@@ -140,7 +145,7 @@ function run_pipeline {
     motion_file=${motion_file}.tcat
     
     #Extract brain mask
-    3dAutomask -prefix mask.brain T1+tlrc
+    3dAutomask -prefix mask.brain $T1_at
     3dresample -master $curEPI -rmode NN -inset mask.brain+tlrc -prefix mask.brain.resample
     
     #Normalize based on global mode
