@@ -10,6 +10,8 @@ FUNCSLICEACQ="seqasc"
 
 MRROOT="/data/Luna1/Raw/WorkingMemory/"
 
+SUBJNAMEPATT='^[0-9]{5}_[0-9]{8}$'
+
 
 # given an id, pattern, and dicomcount
 # echo the 1 directory that matches or return error

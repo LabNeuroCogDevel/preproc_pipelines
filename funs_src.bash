@@ -40,6 +40,8 @@ function wantonlyoneid {
  func=${FUNCNAME[1]}
  [ -z "$1" ] && warn "no subject id given to $func" && return 1
  [ -n "$2" ] && warn "too many subject ids given to $func ($@)" && return 1
+
+ [ -n "$SUBJNAMEPATT" ] && [[ ! $1 =~ $SUBJNAMEPATT ]] && warn "$1 does not look like a subject ($SUBJNAMEPATT)" && return 1
  return 0
 }
 
@@ -294,3 +296,20 @@ file_exists_test(){
  return 0
 }
 
+# take dicom pattern and make it a compressed nifti
+# dimon_niigz 'MR*' output.nii.gz
+dimon_niigz(){
+ # remove .nii or .nii.gz
+ out=$(basename $1 .nii)
+ out=$(basename $out .nii.gz)
+
+ patt=$2
+ Dimon -infile_prefix ${2} \
+       -GERT_Reco \
+       -dicom_org \
+       -sort_by_acq_time \
+       -gert_create_dataset \
+       -gert_to3d_prefix ${1} \
+       -quit || return 1
+ gzip $1.nii || return 1
+}

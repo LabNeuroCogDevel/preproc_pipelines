@@ -1,15 +1,15 @@
 #!/usr/bin/bash
 PIPE_FOR="MJ"
-PIPE_DESC80="RewardRest: afni with wavelet. regress WM (mot,etc) only. *NOT* global signal "
+PIPE_DESC80="P5: afni with wavelet. regress WM (mot,etc) only. *NOT* global signal "
 PIPE_DESC="
-This pipeline processes rest data for Reward Rest. Based on the output of afni_restproc.py
+This pipeline processes rest data for P5. Based on the output of afni_restproc.py
 with wavlet injected
 wavlet    yes
 regs      wm
 with DVARS+FD censor (DVARS post wavelet)
 "
 PIPE_DEPENDS=() # FS
-PIPE_VERSION="20160309"
+PIPE_VERSION="20160720"
 FINALPREFIX="WavWM"
 FINALOUT=("${FINALPREFIX}.cleanEPI+tlrc.HEAD" ".afni_complete" )
 
@@ -28,7 +28,7 @@ set_motion() {
     # eg. 20160121 on rhea
     #restepi.float_tsh_vr_motion.1D
     [ ! -r "${motion_file}.1D" ] && motion_file="${1}_tsh_vr_motion"
-    [ ! -r "${motion_file}.1D" ] && warn "cannot find moiton file: $(pwd)/$motion_file.1D; have: $(ls *motion*1[Dd])" && return 1
+    [ ! -r "${motion_file}.1D" ] && warn "cannot find motion file: $(pwd)/$motion_file.1D; have: $(ls *motion*1[Dd])" && return 1
     echo $motion_file
 }
 
@@ -45,10 +45,10 @@ function run_pipeline {
  # outher source files (not reward) will return path to e.g. MR*
  epi="/Volumes/Phillips/P5/subj/${id}/preproc/rest/rest.nii.gz"
 
- anat="$(file_exists_test "$SUBJECTS_DIR/$id/mri/T1.mgz")"
- aseg="$(file_exists_test "$SUBJECTS_DIR/$id/mri/aseg.mgz")"
+ #anat="$(file_exists_test "/Volumes/Zeus/preproc/afni_wav+wm-gsr_P5/$id/temp/T1.mgz")"
+ #aseg="$(file_exists_test "/Volumes/Phillips/P5/Freesurfer/$id/temp/aseg.mgz")"
  # we threw warnings if any failed. make sure we dont continue
- [ -z "$anat" -o -z "$epi" -o -z "$aseg" ] && return 1
+ #[ -z "$anat" -o -z "$epi" -o -z "$aseg" ] && return 1
 
  # make sure we're gziping everything
  export AFNI_COMPRESSOR="GZIP"
@@ -65,43 +65,22 @@ function run_pipeline {
  basename=restepi
  ext=+orig
  
- # we dont have to do everything if we already have
- # some of it completed
- # -- we can use the pipeline that did not use GSR
- restartAtDIR="/data/Luna2/Reward/Rest/$id/afni_restproc/wavelet_restoretmp/tmp"
- lastgoodfile="$restartAtDIR/restepi.float_tlrc_al.tcat.norm.blur.wave_despike.bpass.clean+tlrc.BRIK.gz"
-
- # can link
- if [ -r "$lastgoodfile" ]; then
-   echo "STARTING MIDWAY: linking anything not newer than  $lastgoodfile"
-   link_prev_pipe "$restartAtDIR" "$lastgoodfile"
-   suffix=".float_tlrc_al.tcat.norm.blur.wave_despike.bpass.clean"
-   ext="+tlrc"
-   curEPI=${basename}${suffix}${ext}
-   motion_file=$(set_motion $basename.float ) || return 1
-   # we probably tcated the motion file already too
-   motion_file=${motion_file}.tcat
-
+ cp -r /Volumes/Phillips/P5/Freesurfer/${id}/mri/T1.mgz .
+ cp -r /Volumes/Phillips/P5/Freesurfer/${id}/mri/aseg.mgz .
+#copied out right now
    # need WM mask
-   3dmaskave -q -mask mask.WM.resample.erode+tlrc $curEPI > mask.WM.resample.erode.reg.1D
-   1d_tool.py -derivative -infile mask.WM.resample.erode.reg.1D -write mask.WM.resample.erode.reg.backdif.1D
-   1dBandpass -nodetrend 0.009 0.08 mask.WM.resample.erode.reg.1D > mask.WM.resample.erode.reg.bpass.1D
-   1dBandpass -nodetrend 0.009 0.08 mask.WM.resample.erode.reg.backdif.1D > mask.WM.resample.erode.reg.backdif.bpass.1D
+   #3dmaskave -q -mask mask.WM.resample.erode+tlrc $curEPI > mask.WM.resample.erode.reg.1D
+   #1d_tool.py -derivative -infile mask.WM.resample.erode.reg.1D -write mask.WM.resample.erode.reg.backdif.1D
+   #1dBandpass -nodetrend 0.009 0.08 mask.WM.resample.erode.reg.1D > mask.WM.resample.erode.reg.bpass.1D
+   #1dBandpass -nodetrend 0.009 0.08 mask.WM.resample.erode.reg.backdif.1D > mask.WM.resample.erode.reg.backdif.bpass.1D
 
-   # next up, 3dTfitter 
-
- # cannot link
- else
-    echo "STARTING FRESH: cannot find $lastgoodfile"
-    echo "copy anat ($anat) and aseg ($asg)"
-    cp $anat .
-    #cp $epi .
-    cp $aseg .
+  
     
     #Get into BRIK format
-    for mgz_file in `ls *.mgz`; do
-    	mri_convert -it mgz -ot nii -i $mgz_file -o "${mgz_file%.mgz}.nii"
-    done
+ 
+   mri_convert -it mgz -ot nii -i T1.mgz -o T1.nii
+   mri_convert -it mgz -ot nii -i T1.mgz -o aseg.nii
+  
     
     for nii_file in `ls *.nii*`; do
     	3dcopy $nii_file "${nii_file%.nii*}"
@@ -225,8 +204,7 @@ function run_pipeline {
     3dBandpass -nodetrend -prefix ${basename}${suffix}.bpass.clean 0.009 0.08 $curEPI
     suffix=${suffix}.bpass.clean
     curEPI=${basename}${suffix}${ext}
-    
- fi   
+       
  
  #Regress out nuisance signals
  #WF20150216 -- rm'ed mask.brain.resample.reg.backdif.bpass.1D mask.brain.resample.reg.bpass.1D 

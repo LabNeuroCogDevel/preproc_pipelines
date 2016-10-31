@@ -5,7 +5,7 @@ Run the fieldmap portion of preprocessFunctional
 "
 PIPE_DEPENDS=""
 PIPE_VERSION="20151215"
-FINALOUT=("mrmag/linkedfrom" "mrphase/linkedfrom")
+FINALOUT=("mrmag_linkedfrom" "mrphase_linkedfrom")
 
 function check_complete {
  wantonlyoneid $@ || return 1
