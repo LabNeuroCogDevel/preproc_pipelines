@@ -5,7 +5,7 @@ SOURCE_DESC80="PNC rest data"
 SUBJECTS_DIR="/Volumes/Phillips/Maria/PNC/Freesurfer/"
 DICOM_PAT="*.dcm"
 
-FUNCTR="4"
+FUNCTR="3"
 FUNCSLICEACQ="seqasc"
 
 MRROOT="/Volumes/Phillips/Maria/PNC/raw_data"
