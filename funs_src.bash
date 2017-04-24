@@ -180,6 +180,24 @@ function find_t1final {
  [ ! -r "$warp" ] && warn "# cannot read warp '$warp'" && return 1
  echo "$bet $warp"
 }
+function find_t1ant {
+ wantonlyoneid $@ || return 1
+ id="$1"
+
+ [ -z "$PPSUBJSDIR" ] && 
+   warn "need PPSUBJSDIR (root of preprocessed subjects) to be defined" && return 1
+
+ # need t1 should be done b/c of depends
+ mpragedir=$PPSUBJSDIR/../ANT_2mm/$id
+ [ ! -d $mpragedir ] && warn "# cannot find $mpragedir" && return 1
+ 
+ # should have bet and warp outputs
+ bet=$mpragedir/mprage_bet.nii.gz
+ warp=$mpragedir/MNIT11Warp.nii.gz # MNIT11InverseWarp.nii.gz MNIT1Warped.nii.gz ...
+ [ ! -r "$bet"  ] && warn "# cannot read bet '$bet'" && return 1
+ [ ! -r "$warp" ] && warn "# cannot read warp '$warp'" && return 1
+ echo "$bet $warp"
+}
 
 # find field maps (from within functional run_pipeline)
 # return path to each fm reconstructed

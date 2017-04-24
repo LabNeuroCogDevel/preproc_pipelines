@@ -1,0 +1,62 @@
+#!/usr/bin/bash
+PIPE_FOR="MJ"
+PIPE_DESC80="copy gu 2015 pnas"
+PIPE_DESC="
+see gu sup and 
+https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3811142/
+--
+expects to start with dicoms (DICOM_PAT defined in sources/*)
+"
+PIPE_DEPENDS=("ANT_2mm")
+PIPE_VERSION="20170215"
+FINALOUT=( ".preprocessfunctional_complete" )
+
+
+function check_complete {
+ wantonlyoneid $@ || return 1
+ has_finalout  $1 || return 1
+ return 0
+}
+
+function run_pipeline {
+ id="$1"
+ [ -z "$id" ] && warn "$FUNCNAME: no id given" && return 1
+
+ read bet warp < <(find_t1ant $id)
+
+ [ ! -d "$id" ] && mkdir $id
+ cd $id
+
+ t2dir=$(subj_t2 $id)
+ [ -z "$t2dir" ] && warn "cannot find t2dir for $id" && return 1
+
+ #echo "'$t2dir' '$bet' '$warp'"
+ #return 0
+
+ # link in raw dicoms
+ if [ ! -r 'functional.nii.gz' ]; then
+   [ $(find . -maxdepth 1 -type l -iname "$DICOM_PAT" | wc -l) -gt 0 ] && rm $DICOM_PAT
+   ! ln -s $t2dir/$DICOM_PAT ./ && warn "cannot link $t2dir/MR* files" && return 1
+ fi
+
+
+ yes | preprocessFunctional -dicom "$DICOM_PAT" -delete_dicom y
+   -no_warp \
+   -trunc 4 \
+   -ref_vol median \
+   -st_first \
+   -rescaling_method 100_voxelmean \
+   -smoother susan \
+   -smoothing_kernel 6 \
+   -bandpass_filter 0.01 .08 \
+   -nuisance_regression 6motion,q6motion,qd6motion,d6motion \
+   -mprage_bet $bet -warpcoef $warp \
+   -motion_censor dvars=5 
+
+   #-compute_warp_only \
+   #-tr $TR -slice_acquisition $SEQ  \
+
+
+
+}
+

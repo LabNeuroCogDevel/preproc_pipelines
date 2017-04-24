@@ -1,0 +1,82 @@
+#!/usr/bin/bash
+PIPE_FOR="MJ"
+PIPE_DESC80="stand. rest + rm autocorr w/3dREMLfit via preprocessFunctional"
+PIPE_DESC="
+This pipeline created to processes rest data for PNC
+wavlet    yes
+regs      6motion,wm,csf,d6motion,dwm,dcsf 
+motion    dvars>5,fd computed not regressed
+scaling:  100_voxelmean
+"
+PIPE_DEPENDS=("MHT1_2mm")
+PIPE_VERSION="20170424"
+FINALOUT=( ".preprocessfunctional_complete" )
+
+
+function check_complete {
+ wantonlyoneid $@ || return 1
+ has_finalout  $1 || return 1
+ return 0
+}
+
+function copyFromFinn() {
+ ppdir=/Volumes/Zeus/Finn/PNC/subjs/$1/preproc 
+ [ -r $ppdir/.preprocessfunctional_complete ] || return 1
+ echo "found $ppdir"
+ echo "$ppdir" > INITIAL_FILES_FROM
+
+ cp $ppdir/.*complete ./
+ cp $ppdir/{.preproc_cmd,nuisance_regressors.txt,nswdktm_restepi_5.nii.gz,wktm_restepi_98_2_mask_dil1x_templateTrim.nii.gz,restepi.nii.gz,func_to_struct.mat,mc_target.nii.gz,.median_intensity,.pct2,mc_target_brain.nii.gz} ./
+ rm .preprocessfunctional_complete .nuisance_regression_complete .bandpass_filter_complete
+
+ sed -i 's/$/ -rmautocorr/' .preproc_cmd
+ return 0
+}
+
+function run_pipeline {
+ id="$1"
+ [ -z "$id" ] && warn "$FUNCNAME: no id given" && return 1
+
+ read bet warp < <(find_t1final $id)
+
+ [ ! -d "$id" ] && mkdir $id
+ cd $id
+
+ #t2dir=$(subj_t2 $id)
+ #[ -z "$t2dir" ] && warn "cannot find t2dir for $id" && return 1
+
+ #echo "'$t2dir' '$bet' '$warp'"
+ #return 0
+
+ #if [ ! -r 'functional.nii.gz' ]; then
+ #  [ $(find . -maxdepth 1 -type l -iname 'MR*' | wc -l) -gt 0 ] && rm MR*
+ #  ! ln -s $t2dir/MR* ./ && warn "cannot link $t2dir/MR* files" && return 1
+ #fi
+ t2=$(subj_t2_construct $id)
+
+ [ -z "$FUNCTR" -o -z "$FUNCSLICEACQ" -o -z "$t2" -o ! -r "$t2" ] && \
+   warn "poorly defined input for $id (t2:'$t2',FUNCTR:'$FUNCTR',FUNCSLICEACQ:'$FUNCSLICEACQ'!" &&\
+   return 1
+
+ copyFromFinn $id || 3dcopy $t2 restepi.nii.gz
+ t2=restepi.nii.gz
+
+ yes | preprocessFunctional -4d $t2 \
+   -mprage_bet $bet -warpcoef $warp \
+   -tr $FUNCTR  -slice_acquisition $FUNCSLICEACQ \
+   -4d_slice_motion \
+   -threshold 98_2 \
+   -bandpass_filter 0.009 .08 \
+   -rescaling_method 10000_globalmedian \
+   -template_brain MNI_2.3mm \
+   -func_struc_dof bbr \
+   -warp_interpolation spline \
+   -constrain_to_template y \
+   -wavelet_despike -wavelet_m1000 -wavelet_threshold 10 \
+   -motion_censor fd=0.3,dvars=20 \
+   -nuisance_file nuisance_regressors.txt \
+   -nuisance_compute csf,dcsf,wm,dwm \
+   -nuisance_regression 6motion,d6motion,csf,dcsf,wm,dwm \
+   -rmautocorr
+}
+

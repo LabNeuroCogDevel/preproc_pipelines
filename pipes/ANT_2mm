@@ -1,0 +1,53 @@
+#!/usr/bin/bash
+PIPE_FOR="MJ"
+PIPE_DESC80="use ANTS for SyN warp"
+PIPE_DESC="
+run ANTs to get warpcoefs for warp between MNI and T1
+"
+PIPE_DEPENDS=""
+PIPE_VERSION="20170216"
+FINALOUT=("mprage_bet.nii.gz" "MNIT1Warped.nii.gz")
+
+function check_complete {
+ wantonlyoneid $@ || return 1
+ has_finalout  $1 || return 1
+ return 0
+}
+# run from $PPSUBJSDIR 
+function run_pipeline {
+ # check id input and make/cd into id dir
+ id="$1"
+ wantonlyoneid $id || return 1
+ [ ! -d "$id" ] && mkdir $id
+ cd $id
+
+ # find the t1dir with MRs in it
+ t1dir=$(subj_t1 $id)
+ [ -z $t1dir ] && warn "cannot find t1 dir for $id" && return 1
+ if [ $(find $t1dir -maxdepth 1 -iname "$DICOM_PAT" |wc -l) -gt 0 ]; then
+    ln -s $t1dir/$DICOM_PAT ./ || return 1
+    dimon_niigz "$DICOM_PAT" mprage.nii.gz
+ elif [[ $t1dir  =~ mgz$ ]]; then
+    mri_convert $t1dir mprage.nii.gz
+ elif [[ $t1dir  =~ (img|IMG|HEAD|BRIK|BRIK.gz|nii|nii.gz)$ ]]; then
+    3dcopy $t1dir mprage.nii.gz
+ else
+   warn "dont know how to make $t1dir into mprage.nii.gz"
+   return 1
+ fi
+
+ [ ! -r mprage.nii.gz ] && warn "failed to make $t1dir into mprage.nii.gz!" && return 1
+
+ # SKULL STRIP/BRAIN EXTRACT
+ betopts=""
+ [ -r bet_opts.cfg ] && betopts="$(cat bet_opts.cfg)"
+ bet $betopts mprage.nii.gz mprage_bet.nii.gz 
+
+ MNI2MM=/opt/ni_tools/standard_templates/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_brain_2mm.nii
+
+ # WARP
+ export ANTSPATH="/opt/ni_tools/antsbin/bin/"
+ ANTSscripts="/opt/ni_tools/ANTs/Scripts"
+ $ANTSscripts/antsRegistrationSyNQuick.sh -d 3 -f $MNI2MM -m mprage_bet.nii.gz -t so  -o MNIT1
+}
+
