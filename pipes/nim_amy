@@ -34,9 +34,8 @@ function run_pipeline {
  mkdir $id
  cd $id
 
- # TODO: if not HEAD and is dir, dimon it
  # outher source files (not reward) will return path to e.g. MR*
-  epi="$(subj_t2 $id)"
+  epi="$(subj_t2_construct $id)"
  anat="$(subj_t1 $id)"
  aseg="$(subj_FS_aseg $id)"
  # we threw warnings if any failed. make sure we dont continue

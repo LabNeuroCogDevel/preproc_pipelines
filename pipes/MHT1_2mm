@@ -23,8 +23,29 @@ function run_pipeline {
 
  # find the t1dir with MRs in it
  t1dir=$(subj_t1 $id)
- [ -z $t1dir ] && warn "cannot find t1 dir for $id" && return 1
- ln -s $t1dir/MR* ./ || return 1
- preprocessMprage -r MNI_2mm -d yes && touch ".mprage_complete"
+ [ -z "$t1dir" ] && warn "cannot find t1 dir for $id" && return 1
+
+ # if we have a directory:
+ #   is there a bet and warpcoef in there? -- use that
+ #   otherwise link in the MR* or *.dcm and run preprocessMprage
+ # if we are given a file
+ #   use preprocessMprage on that
+ if [ -d "$t1dir" ]; then
+   if [ -r $t1dir/mprage_bet.nii.gz -a -r $t1dir/mprage_warpcoef.nii.gz ]; then
+      ln -s $t1dir/mprage_{bet,warpcoef}.nii.gz  ./
+
+   elif [ $(find $t1dir -maxdepth 1 -iname "$DICOM_PAT" |wc -l ) -gt 0 ]; then
+      ln -s $t1dir/$DICOM_PAT  ./ || return 1
+      preprocessMprage -r MNI_2mm -d yes && touch ".mprage_complete"
+   fi
+
+ elif [ -r "$t1dir" ]; then
+   preprocessMprage -r MNI_2mm -d yes -n $t1dir && touch ".mprage_complete"
+
+ else
+   warn "t1 input does no make sense: '$t1dir'"
+   return 1
+ fi
+
 }
 

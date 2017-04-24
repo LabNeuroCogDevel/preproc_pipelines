@@ -2,14 +2,16 @@
 PIPE_FOR="MJ"
 PIPE_DESC80="copy gu 2015 pnas"
 PIPE_DESC="
-see gu sup and 
+see gu sup 
+https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4640772/bin/pnas.1502829112.sapp.pdf
+and ref
 https://www.ncbi.nlm.nih.gov/pmc/articles/PMC3811142/
 --
 expects to start with dicoms (DICOM_PAT defined in sources/*)
 "
 PIPE_DEPENDS=("ANT_2mm")
 PIPE_VERSION="20170215"
-FINALOUT=( ".preprocessfunctional_complete" )
+FINALOUT=( ".preprocessfunctional_complete" "gordon_epi.nii.gz" "gordon_epi_roistats.txt")
 
 
 function check_complete {
@@ -31,6 +33,7 @@ function run_pipeline {
  [ -z "$t2dir" ] && warn "cannot find t2dir for $id" && return 1
 
  #echo "'$t2dir' '$bet' '$warp'"
+ #ls $t2dir
  #return 0
 
  # link in raw dicoms
@@ -40,7 +43,7 @@ function run_pipeline {
  fi
 
 
- yes | preprocessFunctional -dicom "$DICOM_PAT" -delete_dicom y
+ yes | preprocessFunctional -dicom "$DICOM_PAT" -delete_dicom yes \
    -no_warp \
    -trunc 4 \
    -ref_vol median \
@@ -51,11 +54,33 @@ function run_pipeline {
    -bandpass_filter 0.01 .08 \
    -nuisance_regression 6motion,q6motion,qd6motion,d6motion \
    -mprage_bet $bet -warpcoef $warp \
-   -motion_censor dvars=5 
+   -motion_censor dvars=5  \
+   -compute_warp
 
    #-compute_warp_only \
    #-tr $TR -slice_acquisition $SEQ  \
 
+ ## ROI in subject space
+
+ export ANTSPATH="/opt/ni_tools/antsbin/bin/"
+ GORDONROI=/Volumes/Phillips/CogRest/atlas/Parcels_MNI_111_warped.nii.gz 
+ ANTSscripts="/opt/ni_tools/ANTs/Scripts"
+
+ # link in all the mprage and warp stuff
+ # MNIT10GenericAffine.mat
+ for f in $(dirname $warp)/*.{mat,nii.gz};  do
+   [ ! -L $(basename $f) ] && ln -s $f ./
+ done
+
+ # covert fls's aff matrix into itk (ANT) compatabile binary
+ c3d_affine_tool -ref mprage_bet.nii.gz  -src mc_target.nii.gz  func_to_struct.mat  -fsl2ras -oitk func_to_struct.tfm 
+
+ 
+ mat=$(ls *0GenericAffine.mat)
+ [ -z "$mat" ] && return 1
+ antsApplyTransforms -i $GORDONROI -t [func_to_struct.tfm,1]  -t *1InverseWarp.nii.gz -t [$mat,1] -n NearestNeighbor -o gordon_epi.nii.gz  -r mc_target.nii.gz
+
+ 3dROIstats -mask gordon_epi.nii.gz brnskmt0_functional_6.nii.gz > gordon_epi_roistats.txt
 
 
 }
