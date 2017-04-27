@@ -44,6 +44,7 @@ $(listdir pipes)
 scriptdir=$(cd $(dirname $0);pwd)
 source $scriptdir/funs_src.bash
 
+[ "$1" = "-h" ] && help && list_pipeandsource && exit 0
 [ -z "$2" ] && usage "need better arguemnts, try $(list_pipeandsource)"
 datasource=$1; pipeline=$2
 
