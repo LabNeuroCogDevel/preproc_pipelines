@@ -307,9 +307,9 @@ allow_group_write(){
 }
 
 file_exists_test(){
- [ -z "$1" ] && echo "$FUNC_NAME needs a file to check" && return 1
+ [ -z "$1" ] && echo "$FUNCNAME needs a file to check" && return 1
  f=$1
- [ ! -r "$f" ] && warn "(${FUNC_NAME[1]}) cannot find: $f " && return 1
+ [ ! -r "$f" ] && warn "(${FUNCNAME[1]}) cannot find: $f " && return 1
  echo "$f"
  return 0
 }
@@ -330,4 +330,19 @@ dimon_niigz(){
        -gert_to3d_prefix ${1} \
        -quit || return 1
  gzip $1.nii || return 1
+}
+
+# translate e.g. 10192_20140223 to $BIDSROOT/sub-10192/20140223
+# expect BIDSROOT to be defined in source
+ld8_to_bids(){
+ [ -z "$BIDSROOT" ] && warn "BIDSROOT is not defined!" && return 1
+ wantonlyoneid $@ || return 1
+ id="$1"
+ lunadate=$1
+ luna=${lunadate%%_*}
+ vdate=${lunadate##*_}
+ dir=$BIDSROOT/sub-$luna/$vdate
+ [ -z "$dir" ] && warn "subj bids dir '$dir' DNE!" && return 1
+ echo $dir
+
 }

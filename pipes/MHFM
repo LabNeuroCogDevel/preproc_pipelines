@@ -54,7 +54,11 @@ function run_pipeline {
  # run
  fieldmap_dicom_nifti || return 1
 
+ for f in mr*/*_inprocess; do
+  [ -r $f ] && warn "removing $f" && rm $f
+ done
  # exit successfuly
  return 0
 }
 
+# vim: set tabstop=7:

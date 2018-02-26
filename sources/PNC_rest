@@ -12,6 +12,27 @@ MRROOT="/Volumes/Phillips/Maria/PNC/raw_data"
 
 DCMRECONDIR="/Volumes/Phillips/Maria/PNC/rest_fMRI/"
 
+subj_t1_prev() {
+ file_exists_test /Volumes/Zeus/Finn/PNC/subjs/$1/struct/
+}
+subj_t1_fs() {
+ FST1="$SUBJECTS_DIR/$1/mri/T1.mgz"
+ FST1gz="mprage.nii.gz"
+ if [ ! -r "$FST1gz" ]; then
+  pwd >&2
+  if [ -r  "$FST1" ]; then
+   mri_convert "$FST1" "$FST1gz" 
+   wait
+  else
+   warn "cannot find $FST1 to convert"
+   return 1
+  fi
+ fi
+ file_exists_test "$FST1gz"
+}
+subj_t1_dcm(){
+ subj_mr_pat $MRROOT/$1/T1_3DAXIAL/ 'Dicoms' 160 || return 1
+}
 
 function subj_t1 {
  wantonlyoneid $@ || return 1
@@ -20,11 +41,11 @@ function subj_t1 {
  # none yet
 
  # use finn's
- file_exists_test /Volumes/Zeus/Finn/PNC/subjs/$1/struct/
+ #file_exists_test /Volumes/Zeus/Finn/PNC/subjs/$1/struct/
 
  # # return dicom dir
  # # /Volumes/Phillips/Maria/PNC/raw_data/603155642406/T1_3DAXIAL/Dicoms/
- # subj_mr_pat $MRROOT/$1/T1_3DAXIAL/ 'Dicoms' 160 || return 1
+ subj_mr_pat $MRROOT/$1/T1_3DAXIAL/ 'Dicoms' 160 || return 1
 
  # previous annoted 
  # do not use original, use FS warped -- so we can use aseg

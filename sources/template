@@ -1,6 +1,17 @@
 #!/usr/bin/env bash
-SUBJECTS_DIR="/data/Luna1/MM/FS_Subjects/"
+SOURCE_DESC80="DESC in 80 chars"
+
+SUBJECTS_DIR="/DNE/"
 DICOM_PAT="MR*"
+
+FUNCTR="1"
+FUNCSLICEACQ="seqasc"
+
+MRROOT="/Volumes/Phillips/Raw/MRprojects/P5Sz/"
+
+# which field map config settings 
+FM_CFG=clock
+
 
 function list_all {
 }
@@ -29,4 +40,18 @@ function subj_ref {
 }
 function subj_physio {
  wantonlyoneid $@ || return 1
+}
+function subj_fm {
+ wantonlyoneid $@ || return 1
+
+ local path=($MRROOT/*/$1)
+ warn "$FUNCNAME: looking for ${path[@]}"
+
+ [ ${#path[@]} -gt 1 ] && warn "$FUNCNAMME: $1 has too many possible paths (${#path[@]}): ${path[@]}" && return 1
+
+ mag=$(subj_mr_pat $path 'gre_field_*' 120)
+ [ -z "$mag" ] && return 1
+ phase=$(subj_mr_pat $path 'gre_field_*' 60)
+ [ -z "$phase" ] && return 1
+ echo "$mag $phase"
 }

@@ -21,8 +21,10 @@ function run_pipeline {
  [ ! -d "$id" ] && mkdir $id
  cd $id
 
+ # find t1
+ t1dir=$(declare -f subj_t1_prev >/dev/null && subj_t1_prev $id)
  # find the t1dir with MRs in it
- t1dir=$(subj_t1 $id)
+ [ -z "$t1dir" ] && t1dir=$(subj_t1 $id)
  [ -z "$t1dir" ] && warn "cannot find t1 dir for $id" && return 1
 
  # if we have a directory:
@@ -35,15 +37,20 @@ function run_pipeline {
       ln -s $t1dir/mprage_{bet,warpcoef}.nii.gz  ./
 
    elif [ $(find $t1dir -maxdepth 1 -iname "$DICOM_PAT" |wc -l ) -gt 0 ]; then
-      ln -s $t1dir/$DICOM_PAT  ./ || return 1
+      echo "$t1dir/$DICOM_PAT" > .mprageDCMdir
+      for d in $t1dir/$DICOM_PAT; do
+       [ -r ./$(basename $d) ] && continue
+       ln -s $d ./$(basename $d) || return 1
+      done
       preprocessMprage -r MNI_2mm -d yes && touch ".mprage_complete"
    fi
 
- elif [ -r "$t1dir" ]; then
-   preprocessMprage -r MNI_2mm -d yes -n $t1dir && touch ".mprage_complete"
+ elif [ -r "$t1dir" -a ! -d "$t1dir" ]; then
+   cp $t1dir mprage.nii.gz
+   preprocessMprage -r MNI_2mm -n mprage.nii.gz && touch ".mprage_complete"
 
  else
-   warn "t1 input does no make sense: '$t1dir'"
+   warn "t1 input does not make sense: '$t1dir' (in $(pwd))"
    return 1
  fi
 

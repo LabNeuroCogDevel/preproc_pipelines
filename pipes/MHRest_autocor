@@ -19,9 +19,15 @@ function check_complete {
  return 0
 }
 
-function copyFromFinn() {
+function copyFromPrev() {
  ppdir=/Volumes/Zeus/Finn/PNC/subjs/$1/preproc 
+ echo checking $ppdir
+ # check Finn, then try MM
+ [ -r $ppdir/.preprocessfunctional_complete ] || ppdir=/Volumes/Phillips/Maria/Reward_Rest/$id/MH_finn/
+ echo checking $ppdir
+ # if we still dont have, quit with error
  [ -r $ppdir/.preprocessfunctional_complete ] || return 1
+
  echo "found $ppdir"
  echo "$ppdir" > INITIAL_FILES_FROM
 
@@ -55,10 +61,11 @@ function run_pipeline {
  t2=$(subj_t2_construct $id)
 
  [ -z "$FUNCTR" -o -z "$FUNCSLICEACQ" -o -z "$t2" -o ! -r "$t2" ] && \
-   warn "poorly defined input for $id (t2:'$t2',FUNCTR:'$FUNCTR',FUNCSLICEACQ:'$FUNCSLICEACQ'!" &&\
+   warn "poorly defined input for '$id' (t2:'$t2',FUNCTR:'$FUNCTR',FUNCSLICEACQ:'$FUNCSLICEACQ'!" &&\
    return 1
 
- copyFromFinn $id || 3dcopy $t2 restepi.nii.gz
+ copyFromPrev $id || return 1 
+ #3dcopy $t2 restepi.nii.gz
  t2=restepi.nii.gz
 
  yes | preprocessFunctional -4d $t2 \

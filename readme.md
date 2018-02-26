@@ -13,10 +13,11 @@ pipes can depend on other pipes (t1 for t2)
 Contains info about MR protocol for datasource
  * `SUBJECTS_DIR` FreeSurfer directory
  * `DICOM_PAT` e.g. `MR*`
- * `list_all` function to list all subject ids
- * `subj_t1` function to location of MR of subject. takes one argument: id. returns 1 folder with `$DICOM_PATT` or hdr
- * `subj_t2` function to location of MR of subject. takes one argument: id. returns n folders with `$DICOM_PATT` or hdr 
- * `subj_ref` function to locate  return ref hdr, matches length of `subj_t2`
+ * `list_all`   function to list all subject ids
+ * `subj_t1`    function to location of MR of subject. takes one argument: id. returns 1 folder with `$DICOM_PATT` or hdr
+ * `subj_t2`    function to location of MR of subject. takes one argument: id. returns 1 folder with `$DICOM_PATT` or hdr  (rest)
+ * `subj_t2s`   function to location of multiple bold. takes one argument: id. returns n nifti files
+ * `subj_ref`   function to locate  return ref hdr, matches length of `subj_t2`
  * `subj_physio` 
 
 ### Pipelines

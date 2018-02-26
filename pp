@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 ## USAGE
 # $0 datasource pipeline [ids]
 # 
@@ -125,6 +124,11 @@ function runwithdepends {
    rm $lockfile
  fi
  
+ # group can write for all pipelines
+ [ -d "$id" ] && chmod -R g+w "$id"
+
+ wait
+
  return 0
 }
 
@@ -134,11 +138,11 @@ function runwithdepends {
 PPSUBJSDIR="/Volumes/Zeus/preproc/$(basename $datasource)/$(basename $pipeline)"
 [ ! -d "$PPSUBJSDIR" ] && mkdir -p $PPSUBJSDIR
 
-cd $PPSUBJSDIR
 
 # warp it all together
 args_or_list_all_ids $@ | while read id; do
 
+ cd $PPSUBJSDIR
  # only one ID, don't fork
  # but end in error if we dont finish succesfully 
  if [ $# -eq 1 -o -n "$ONEONLY" ]; then
@@ -162,6 +166,8 @@ args_or_list_all_ids $@ | while read id; do
  fi
 
  
+ # wait a second for jobs to report they've already finished
+ sleep 1
  waitforjobs $MAXJOBS
 done
 
@@ -169,3 +175,5 @@ done
 wait
 # any jobs forked by children are not catpured here
 #[ $# -gt 1 -o $MAXJOBS -gt 1 ] && ps
+
+echo "finished!"
