@@ -34,6 +34,10 @@ function usage {
  sed "s:\$0:$0:g" >&2
  err "$@"
 }
+function help {
+ usage 2>&1 |grep -v ERROR
+ return 0
+}
 
 # test only has one input for grant functions
 function wantonlyoneid {
