@@ -72,7 +72,7 @@ function run_pipeline {
     #-custom_slice_times /Volumes/Phillips/mMR_PETDA/scripts/sliceTimings.1D \
     # -hp_filter 40
     yes | preprocessFunctional \
-       -tr $FUNCNAME  \
+       -tr $FUNCTR  \
        -4d func.nii.gz \
        -mprage_bet $bet -warpcoef $warp \
        -wavelet_despike  \
