@@ -1,0 +1,428 @@
+#!/usr/bin/bash
+PIPE_FOR="SM"
+PIPE_DESC80="MMY3(+4?) Rest ICA a la Siegel WashU"
+PIPE_DESC="
+This pipeline processes rest data for Scott's MEG subjects
+using Multiband Data (using fieldmaps and ref&func from hdr/img )
+b/c half filter was already run, this depends on that and links in from it
+The pipeline tries to follow Siegle's ICA paper
+TEST:  MAXJOBS=1 ./pp MM_rest MHRest_MB_ica 11325_20141007
+----
+++++++++++++++
++++ Type A +++
+++++++++++++++
+== minimal preproc: 
+1.4d slice/motion
+2. mni
+3. mean * 10^4
+4. smooth
+==
+5. motion reg 
+6. FIX-ICA denoise
+  a. highpass @ .0005Hz (1/2000)
+  b. spatial ICA - classified signal vs noise
+  c. regress all noise time courses + 24 motion 
+7. extract gorden rois
+8. detrend, demean, var norm. (zscore?)
+9. ORIG PAPER -- regression: gm, 5wm; 5 vert
+   INSTEAD    -- compcor: first 5 PC (PCA) on wm+vert
+              ++ bandpass
+++++++++++++++
++++ Type B +++
+++++++++++++++
+10. censor FD>0.025 
+    DVARS < 105% median ( skip for now)
+
+----
+"
+PIPE_DEPENDS=("MHT1_2mm" "cpFM" "halffilter_MB" )
+PIPE_VERSION="20160915"
+FINALOUT=( ".preprocessfunctional_complete" )
+# https://github.com/LabNeuroCogDevel/fmri_processing_scripts/
+MHSCRIPTDIR=$(dirname $(which preprocessFunctional))/preproc_functions/
+
+function check_complete {
+ wantonlyoneid $@ || return 1
+ has_finalout  $1 || return 1
+ return 0
+}
+
+linkold() {
+
+ wantonlyoneid $@ || return 1
+ # link in things we can use from halffliter_MB
+ local prevpipedir="../../halffilter_MB/$id"
+ for f in {,_,ktm_}functional.nii.gz unwarp motion.par functional_ref.nii.gz subject_mask.nii.gz func_to_struct.mat ktm_functional_98_2_mask{,_dil1x}.nii.gz;  do
+  lnf=$prevpipedir/$f 
+  [ ! -r $lnf ] && warn "cannot find file to link '$lnf'!" && return 1
+  [ -L $(basename $lnf) ] && continue
+  ! ln -s $lnf ./ && warn "could not link $lnf to $(pwd)" && return 1
+ done
+ return 0
+}
+
+warp(){
+ # skip if we did this
+ [ -r .warp_complete ] && return 0
+
+ wantonlyoneid $@ || return 1
+ id="$1"
+
+ # make sure we have our script file
+ [ ! -r $MHSCRIPTDIR/onestep_warp ] && warn "no one step warp script in $MHSCRIPTDIR!? I need that" && return 1
+ . $MHSCRIPTDIR/helper_functions
+ . $MHSCRIPTDIR/onestep_warp
+ . $MHSCRIPTDIR/warp_to_template
+
+ # need warpCoef. dont care about bet
+ read bet warpCoef < <(find_t1final $id)
+ [ -z "$warpCoef" -o ! -r "$warpCoef" ] && return 1
+
+
+ # set all the globals
+ mc_first=""        
+ st_first=""        
+ nowarp=""
+ no_warp=0
+ no_st=0           
+ despike=0          
+ createBBRFmapWarp=1       
+ sliceMotion4D=1       
+ cleanup=1
+ constrainToTemplate=y
+ templateBrain="/opt/ni_tools/standard_templates/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_brain_2.3mm.nii"
+ # just checks that we want to fieldmap. should have unwarp directory
+ fm_phase="existssomewhere"
+ prefix=ktm_           
+ funcFile=functional         
+ preMC=_functional.nii.gz           
+ postDespike="errorifwegethere"
+ postSS=ktm_functional           
+ funcWarpInterp=spline  
+
+ # this is generated in warp_to_template
+ # subjMask=wktm_functional_98_2_mask_dil1x_templateTrim         
+ # from this:
+ threshMask=ktm_functional_98_2_mask_dil1x
+
+
+ warp_to_template || return 1
+
+ return 0
+
+
+ # applywarp --ref=/opt/ni_tools/standard_templates/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_brain_2.3mm.nii --in=ktm_functional_98_2_mask_dil1x --out=wktm_functional_98_2_mask_dil1x --interp=nn --premat=func_to_struct.mat --warp=/Volumes/Zeus/preproc/MM_rest/MHRest_MB_ica/../MHT1_2mm/11325_20141007/mprage_warpcoef.nii.gz --paddingsize=0
+ # fslmaths /opt/ni_tools/standard_templates/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_brain_2.3mm.nii -thrP 10 -bin templateMask -odt char
+ # fslmaths wktm_functional_98_2_mask_dil1x -sub templateMask -thr 0 wktm_functional_98_2_mask_dil1x_outOfAnatBounds -odt char
+ # fslmaths wktm_functional_98_2_mask_dil1x -sub wktm_functional_98_2_mask_dil1x_outOfAnatBounds wktm_functional_98_2_mask_dil1x_templateTrim -odt char
+ # convertwarp --ref=/opt/ni_tools/standard_templates/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_brain_2.3mm.nii --warp1=unwarp/EF_UD_warp_bbr --midmat=func_to_struct.mat --warp2=/Volumes/Zeus/preproc/MM_rest/MHRest_MB_ica/../MHT1_2mm/11325_20141007/mprage_warpcoef.nii.gz --relout --out=func_to_standard_warp_allv
+ # applywarp --in="ktm_functional" --out="wuktm_functional" --warp=func_to_standard_warp_allv --ref=/opt/ni_tools/standard_templates/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_brain_2.3mm.nii --rel --mask=wktm_functional_98_2_mask_dil1x_templateTrim --interp=spline
+
+
+}
+
+normalize() {
+  input=wuktm_functional
+  out=n$input
+  [ -r $out.nii.gz ] && return 0
+  #mask=ktm_functional_98_2_mask 
+  [ ! -r .mean_intensity ] && fslstats $input -M > .mean_intensity #  -k $mask
+  read mean_intensity < .mean_intensity
+  rescalingFactor=$( echo "scale=5; 10000/${mean_intensity}" | bc )
+  fslmaths $input -mul $rescalingFactor $out -odt float
+
+}
+
+smooth() {
+
+   # input     ktm_functional.nii.gz        (linked from previous preprocessing)
+   # output nwuktm_functional_susan.nii.gz
+
+   . $MHSCRIPTDIR/helper_functions
+   . $MHSCRIPTDIR/spatial_smooth
+
+   #  get median value
+   skullstrip=ktm_functional
+   [ ! -r .median_intensity ] && fslstats $skullstrip -P 50 > .median_intensity #  -k $mask
+   read median_intensity < .median_intensity
+   p_2=0 # we didn't mask the 2_98 so we dont need to subtract the p_t in michals scripts
+
+   no_smooth=0
+   smoothing_suffix="_susan"
+   prefix="nwuktm_"
+   funcFile=functional
+   smoothing_kernel=5
+   smoother=susan
+   sigma=$( echo "scale=5; $smoothing_kernel/2.355" | bc )
+
+   spatial_smooth
+}
+
+regmot() {
+  input=$1  #  snwuktm_functional_susan.nii.gz 
+  output=$2 # rsnwuktm_functional.nii.gz
+  [ ! -r $input ] && warn "$FUNC_NAME: cannot find input '$input'" && return 1
+  [ -r $output ] && return 0
+
+  [ ! -d rmme/ ] && mkdir rmme
+  3dDeconvolve -overwrite \
+    -input $input \
+    -polort 0 \
+    -num_stimts 6 \
+    -stim_file 1 motion.par[0] -stim_base 1 -stim_label 1 'mot_1'\
+    -stim_file 2 motion.par[1] -stim_base 2 -stim_label 2 'mot_2'\
+    -stim_file 3 motion.par[2] -stim_base 3 -stim_label 3 'mot_3'\
+    -stim_file 4 motion.par[3] -stim_base 4 -stim_label 4 'mot_4'\
+    -stim_file 5 motion.par[4] -stim_base 5 -stim_label 5 'mot_5'\
+    -stim_file 6 motion.par[5] -stim_base 6 -stim_label 6 'mot_6'\
+    -errts $output -bucket decon.rmme/x
+}
+
+melodic_(){
+ # http://www.ncbi.nlm.nih.gov/pubmed/24389422
+ # https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4019210/
+ # https://github.com/Washington-University/Pipelines/blob/master/Examples/Scripts/IcaFixProcessingBatch.sh
+ # https://github.com/Washington-University/Pipelines/blob/master/ICAFIX/hcp_fix.for_fix1.062
+
+ # check inputs
+ fmri=$1
+ ! imtest $fmri && warn "$fmir DNE!" && return 1
+
+
+ # -- skipping this b/c data is not that long 
+ # # 1. highpass filter
+ #
+ # ### MH way
+ # . $MHSCRIPTDIR/helper_functions
+ # . $MHSCRIPTDIR/highpass_filter
+ # no_hp=0
+ # hpFilter=2000s
+ # highpass_filter
+ #
+ # ## HCP way
+ # hp=2000
+ # hptr=`echo "10 k $hp 2 / $tr / p" | dc -`
+ # fslmaths $fmri -bptf $hptr -1 ${fmri}_hp$hp
+ # fmri=${fmri}_hp$hp
+ icadir=ica/
+
+ #2. spatial ICA (signal vs noise)
+ [ -r $icadir/filtered_func_data.ica/melodic_pca.nii.gz ] && return 0
+
+ [ -d $icadir ] && rm -r 
+ mkdir -p $icadir
+
+ tr=$(fslval $fmri pixdim4)
+ melodic -i $fmri -o $icadir -d -250 --nobet --report --Oall --tr=$tr
+
+
+}
+abspath(){
+ [ -z "$1" ] && warn "$FUNCNAME given empty input" && return 1
+
+ d="$(dirname $1)"
+ [ ! -d $d ] && warn "$FUNCNAME: directory of '$1' DNE" && return 1
+
+ final=$(cd $d;pwd)/$(basename $1)
+ [ -L "$final" ] && final=$(abspath $(readlink $final))
+
+
+ echo $final
+}
+# given a 
+prepare_ica() {
+
+  fixdir=fix # to be created
+
+  # need these things
+  func="$1"
+  icadir=ica/filtered_func_data.ica
+  mbref="functional_ref.nii.gz"; mean="$mbref"
+  motregs=motion.par 
+  template_brain="/opt/ni_tools/standard_templates/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_brain_2.3mm.nii"
+  mask=$icadir/mask.nii.gz
+
+
+  # TODO/TOFIGUREOUT
+  # we should run matlab_ at some point to detrend motion
+
+  #####
+  # http://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FIX/UserGuide
+  #Input files required - in more detail
+  # If you haven't done the full GUI-based MELODIC/FEAT analysis, you will need, in one directory:
+  # filtered_func_data.nii.gz          preprocessed 4D data
+  # filtered_func_data.ica             melodic (command-line program) full output directory
+  # mc/prefiltered_func_data_mcf.par   motion parameters created by mcflirt (in mc subdirectory)
+  # mask.nii.gz                        valid mask relating to the 4D data
+  # mean_func.nii.gz                   temporal mean of 4D data
+  # reg/example_func.nii.gz            example image from 4D data
+  # reg/highres.nii.gz                 brain-extracted structural
+  # reg/highres2example_func.mat       FLIRT transform from structural to functional space
+  ####
+
+
+  # skip if we've already run
+  # prefiltered_....par motion file is the last linked
+  [ -r $fixdir/mc/prefiltered_func_data_mcf.par ] && return 0
+
+  ## check inputs
+  # [ -z "$icadir" -o ! -d "$icadir" ] && warn "$FUNCNAME: cannot find icadir '$icadir'; did melodic run?" && return 1
+
+  # [ -z "$func" ] && warn "$FUNCNAME needs second argument to be functional file" && return 1
+  # ! imtest "$func" && warn "$FUNCNAME: func '$func' DNE" && return 1
+
+  # ! imtest "$mbref" && warn "$FUNCNAME: mbref (mean) '$mbref' DNE" && return 1
+  # [ ! -r $motregs ] && warn "$FUNCNAME: movement regressors '$motregs' DNE!" && return 1
+
+  # make compelte path -- lots of nested relative links: undo that
+  # test file (or ni image) exists
+  for v in icadir mean func motregs template_brain mask; do
+    # make absolute path
+    printf -v $v $(abspath ${!v})
+
+    # test exists
+    if [ ! -r "${!v}" ] && !  imtest "${!v}" ; then
+       warn "$FUNCNAME: required $v file '${!v}' DNE"
+       return 1
+    fi
+  done
+
+  ## TODO: warp func_ref to mni (by way of FM and struct)
+
+  # make fix directory structure
+  [ -d $fixdir ] && rm -r $fixdir
+  mkdir -p $fixdir/{mc,reg}
+
+  # link in everything
+  ln -s $icadir  $fixdir/
+  imln  $func    $fixdir/filtered_func_data
+
+  #imln  $mean    $fixdir/mean_func # -- ref needs fieldmap warp,  warped to struct, then to mni
+  # we should use ref, but we'd have to figure out the FM and struct+mni warps
+  3dTstat -prefix $fixdir/mean_func.nii.gz -mean $func
+  mean=$(abspath $fixdir/mean_func.nii.gz) # make mean the thing we just calculated instead of ref
+
+  # why does this not work
+  ln -s  $mask   $fixdir/mask.nii.gz || echo "failed to link $mask to $fixdir/mask.nii.gz"
+
+  ln -s $motregs $fixdir/mc/prefiltered_func_data_mcf.par
+
+  # reg:  need 
+  #  reg/highres.nii.gz                 brain-extracted structural
+  imln $template_brain $fixdir/reg/highres
+  imln $mean           $fixdir/reg/example_func
+
+  # both highres (t1) and example (func) are in the same space. so we have a matrix that doesn't do anything
+  makerot --theta=0 >  $fixdir/reg/highres2example_func.mat
+
+
+  # if we had t2w, we could parse out the veins?
+  # https://github.com/Washington-University/Pipelines/blob/master/ICAFIX/hcp_fix.for_fix1.062#L158
+
+
+  # TODO/TOFIGUREOUT
+  # HCP also links in "wmparc"
+
+}
+
+fixica(){
+
+ fixdir=fix
+ [ -z "$fixdir" -o ! -d "$fixdir" ] && 
+   warn "$FUNCNAME:  missing fixdir '$fixdir'; havent run fixica prepare?" && return 1
+
+ # http://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FIX
+ #
+ # For FIX to work well, it is very important that it is run using good 
+ # "training data". While a few example trained-weights files are supplied with 
+ # FIX, for major studies we would strongly recommend training FIX on your own 
+ # study data (see details in the User Guide section). You can find example 
+ # training-input data, including our hand-labellings, here (note that you do not 
+ # need this example training-input data in order to run FIX; you just need the 
+ # download linked in the User Guide - Downloading and Installing FIX section) , 
+ # which includes several trained-weights files). 
+
+ # http://www.fmrib.ox.ac.uk/~steve/ftp/fix.tar.gz
+ # http://www.fmrib.ox.ac.uk/datasets/FIX-training/HCP_hp2000_run1.tar.gz
+
+ export FSL_FIX_MATLAB_MODE=1 # use matlab
+ export MATLAB_BIN=$(which matlab)
+ export MATLAB_BIN=$(which matlab)
+
+ FSL_FIXDIR="/opt/ni_tools/fix1.06"
+ PATH="$PATH:$FSL_FIXDIR"
+ ! which fix && warn "cannot find fsl icafix stuff in '$FSL_FIXDIR'" && return 1
+
+ # tr=$(fslval $fmri pixdim4)
+ trainingdata="${FSL_FIXDIR}/training_files/HCP_hp2000.RData"
+
+ # -m : optionally also cleanup motion confounds, with highpass filtering of motion confounds controlled by:
+ #     -h <highpass>  with a positive <highpass> value, apply highpass with <highpass> being full-width (2*sigma) in seco
+ fix $fixdir $trainingdata  10 -m -h 2000
+}
+
+
+matlab_() {
+ # need fsl fix and matlab stuffs
+ FSLMATLAB=$(dirname $(dirname $(which fsl)))/etc/matlab
+ HCPMATLAB="/opt/ni_tools/HCP_Pipelines/ReApplyFix/scripts/"
+ FSL_FIXDIR="/opt/ni_tools/fix1.06"
+
+ [ ! -d $FSLMATLAB ] && warn "cannot find fsl matlab dir: '$FSLMATLAB'" && return 1
+ [ ! -r $HCPMATLAB/functionmotionconfounds.m ] && warn "cannot read functionmotionconfounds.m in '$HCPMATLAB'" && return 1
+ [ ! -r $FSL_FIXDIR/call_matlab.sh ] && warn "cannot find fsl icafix stuff in '$FSL_FIXDIR'" && return 1
+
+ export MATLABPATH="$MATLAB_PATH:$FSLMATLAB:$HCPMATLAB:$FSL_FIXDIR"
+ #1. partial regression (24 mot + noise)
+ #2. extact rois
+ #3. detrend/demain
+}
+
+
+function run_pipeline {
+ # check we have our preprocessFunctional script directory
+ [ ! -d $MHSCRIPTDIR ] && warn "no preprocessFunctional!? I need that" && return 1
+
+ # check input
+ wantonlyoneid $@ || return 1
+
+ id="$1"
+ [ ! -d "$id" ] && mkdir $id
+ cd $id
+ test_folder_write || return 1
+
+
+ # 1) 4d slice motion: use prev pipe files
+ #    also get fieldmap unwarping and despiked
+ ! linkold $id && warn "link failed" && return 1
+
+ # what about  func_to_standard_warp_allv.nii.gz
+ 
+ # 2) warp to mni 2mm -- doesn't fail with exit status
+ ! warp $id && warn "warp failed" && return 1
+
+ [ ! -r wuktm_functional.nii.gz ] && warn "$id: warping failed to create wuktm_functional.nii.gz!" && return 1
+
+ # 3)
+ normalize 
+
+ # 4) 
+ smooth
+
+ #5) remove motion
+ regmot snwuktm_functional_susan.nii.gz rsnwuktm_functional.nii.gz
+
+ #6) FIX-ICA
+ melodic_ rsnwuktm_functional.nii.gz
+ prepare_ica rsnwuktm_functional.nii.gz
+ fixica      
+
+
+ 
+ check_complete $id || return 1
+
+ allow_group_write
+
+ return 0
+}
+

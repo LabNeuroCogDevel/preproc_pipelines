@@ -1,0 +1,148 @@
+#!/usr/bin/bash
+PIPE_FOR="FC"
+PIPE_DESC80="Initially for pet w/ cogrest+pnc compare"
+PIPE_DESC="
+Generic task pipeline with Distortion Correction (FM)
+smoothing kernel=5
+TEMPLATE_RES default to 2.3
+used to compare cogrest and pnc
+no bbr!
+"
+PIPE_DEPENDS=("MHT1_2mm" "ppDistortion" "MHRest_DMminimal")
+PIPE_VERSION="20171226"
+FINALOUT=( "alltasks_preproc_complete" )
+
+function check_complete {
+ wantonlyoneid $@ || return 1
+ has_finalout  $1 || return 1
+ return 0
+}
+
+function fake_to_warp() {
+   fromdir=$1;
+   [ -z "$fromdir" -o ! -d "$fromdir" ] && warn "$FUNCNAMME: bad from directory '$1'" && return 1
+
+   for f in .pct2 .median_intensity \
+      mc_target{,_brain,_brain_restore}.nii.gz motion_info motion.par\
+      transforms unwarp\
+      ktm_func.nii.gz ktm_func_98_2_mask_dil1x.nii.gz; do
+      [ ! -r $fromdir/$f ] && warn "missing $f in previous run $fromdir!" && return 1
+      [ ! -r $f ] && cp -r $fromdir/$f ./ && echo copied $f
+   done
+
+   for f in .motion_correction_complete .slice_timing_complete .reorient2std_complete \
+      .motion_plots_complete .motion_censor_complete \
+      .thresholding_complete .skull_strip_complete \
+      .func2struct_complete \
+      .prepare_fieldmap_complete .fmunwarp_complete; do
+     [ ! -r $f ] && echo "$(date): $fromdir" > $f || echo "have $f"
+   done
+
+   for f in func.nii.gz _func.nii.gz epi_bet.nii.gz; do
+      [ ! -r $f ] && ln -s $fromdir/$f  ./
+   done
+
+   return 0
+
+}
+
+function run_pipeline {
+ id="$1"
+ [ -z "$id" ] && warn "$FUNCNAME: no id given" && return 1
+ #[ -z "$FM_CFG" ] && warn "$FUNCNAME: no FM_CFG in env!" && return 1
+
+ distortion_dir=$(cd ../ppDistortion/$id/unwarp; pwd)
+ [ -z "$distortion_dir" -o "$distortion_dir" == $(pwd) ] && warn "$id: no distortion dir" && return 1
+
+ [ ! -d "$id" ] && mkdir $id
+ cd $id
+
+ read bet warp  < <(find_t1final $id)
+ for v in bet warp; do # t2 mag phase 
+   [ -z "${!v}" ] && warn "# cannot find $v for $id" && return 1
+ done
+
+ # hack for pet_rac1/2
+ export SKIPDCM2NII=$id
+ # which funcation to use for finding epi
+ findepi=subj_t2s
+ [ -z "$(type -f subj_t2s 2>/dev/null)" ] && findepi=subj_t2 
+
+ # create nii.gz if dne -- but we dont need this -- extra minute and discspace wasted
+ nt2=$($findepi $id |wc -l)
+ [  "$nt2" -eq 0 ] && warn "# $id: cannot find any t2s ($(pwd))" && return 1
+
+ maindir=$(pwd)
+
+
+ local cnt=0
+
+ [ -z "$TEMPLATE_RES" ] && TEMPLATE_RES=MNI_2.3mm && SMOOTH_KERNEL=4
+ #[ -z "$SMOOTH_KERNEL" ] && SMOOTH_KERNEL=5
+ # force smoothing kernel of 5 to match
+ SMOOTH_KERNEL=5
+ [ -n "$SLICESETTINGSFILE" ] && SLICEOPTIONS="-custom_slice_times $SLICESETTINGSFILE"
+ #SLICESETTINGSFILE=/Volumes/Phillips/mMR_PETDA/scripts/sliceTimings.1D 
+
+ # for each t2 (using 'subjs_ts $id | while read' makes cnt inaccessible)
+ while read t2nii name; do
+    rundir=$maindir/$name
+    # [ -z "$t2nii" -o ! -r "$t2nii" ] && warn "# $id: provided t2 ('$t2nii') does not exist (task '$name')" && continue 
+    # [ ! -d "$rundir" ] && mkdir "$rundir"
+    # [ ! -e "$rundir/func.nii.gz" ] && ln -s "$t2nii" "$rundir/func.nii.gz"
+    cd "$rundir"
+    if [ -r .preprocessfunctional_complete ]; then 
+      let ++cnt
+      continue
+    else
+      warn "no file $(pwd)/.preprocessfunctional_complete"
+    fi
+
+    # pwd, eg: /Volumes/Zeus/preproc/petrest_rac1/brnsuwdktm_rest/11453_20151023/
+    # if we have a name, we need to go back one more, and forward additional directory
+    local back="../.."
+    [ -n "$name" ] && back="../../.."
+    DMmin_dir="$back/MHRest_DMminimal/$(basename $(pwd))/$name"
+
+    # get minimal preproc stuffs
+    fake_to_warp "$DMmin_dir" || return 1
+
+    ## finish the rest
+    # -func_struc_dof bbr -> 6 # --- NO BBR ---
+    export MATLAB_RAM_limit=6 # def is 3, effects chunk size but not exec time?
+    yes | preprocessFunctional \
+       -tr $FUNCTR -slice_acquisition $FUNCSLICEACQ \
+       -4d func.nii.gz \
+       -func_struc_dof 6 \
+       -smoothing_kernel $SMOOTH_KERNEL \
+       -mprage_bet $bet -warpcoef $warp \
+       -wavelet_despike  \
+       -wavelet_threshold 10 \
+       -4d_slice_motion  \
+       -distortion_dir "$distortion_dir" \
+       -bandpass_filter 0.009 .08  \
+       -rescaling_method 10000_globalmedian \
+       -template_brain "$TEMPLATE_RES" \
+       -warp_interpolation spline  \
+       -constrain_to_template y  \
+       -motion_censor fd=0.5,dvars=5  \
+       $SLICEOPTIONS \
+       -nuisance_file nuisance_regressors.txt \
+       -nuisance_regression 6motion,d6motion,csf,dcsf,wm,dwm  || echo "$(pwd): preprocessFunctional returned error!"
+
+   # success, so increment count
+   [ -r .preprocessfunctional_complete ] && let ++cnt
+ done < <( $findepi $id 2>/dev/null )
+
+ # track when finished
+ warn "have cnt=$cnt"
+ cd $maindir
+ if [ $cnt -eq $nt2 ]; then
+   echo "$(date) finished $nt2" >>  "alltasks_preproc_complete"
+ else
+  warn "$id finished preproc of only '$cnt' of '$nt2' tasks"
+  return 1
+ fi
+
+ return 0
+}

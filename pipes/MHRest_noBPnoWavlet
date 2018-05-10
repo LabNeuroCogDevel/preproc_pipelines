@@ -1,0 +1,62 @@
+#!/usr/bin/bash
+PIPE_FOR="SM"
+PIPE_DESC80="MMY4 for MEG, no bandpass"
+PIPE_DESC="
+This pipeline created to processes rest data for MultiModal (MB) year 4
+intened to match with meg
+4dmotion  yes
+wavlet    no
+bandpass  no
+regs      6motion,d6motion,wm,dwm,csf,dcsf 
+motion    dvars>5,fd computed not regressed
+scaling:  100_voxelmean
+TODO: lead and lag motion! (edit preprocessFunctional)
+"
+PIPE_DEPENDS=("MHT1_2mm")
+PIPE_VERSION="20160518"
+FINALOUT=( ".preprocessfunctional_complete" )
+
+
+function check_complete {
+ wantonlyoneid $@ || return 1
+ has_finalout  $1 || return 1
+ return 0
+}
+
+function run_pipeline {
+ id="$1"
+ [ -z "$id" ] && warn "$FUNCNAME: no id given" && return 1
+
+ read bet warp < <(find_t1final $id)
+
+ [ ! -d "$id" ] && mkdir $id
+ cd $id
+
+ t2dir=$(subj_t2 $id)
+ [ -z "$t2dir" ] && warn "cannot find t2dir for $id" && return 1
+
+ #echo "'$t2dir' '$bet' '$warp'"
+ #return 0
+
+ if [ ! -r 'functional.nii.gz' ]; then
+   [ $(find . -maxdepth 1 -type l -iname 'MR*' | wc -l) -gt 0 ] && rm MR*
+   ! ln -s $t2dir/MR* ./ && warn "cannot link $t2dir/MR* files" && return 1
+ fi
+
+ yes | preprocessFunctional -delete_dicom yes -dicom 'MR*' \
+   -mprage_bet $bet -warpcoef $warp \
+   -4d_slice_motion \
+   -rescaling_method 100_voxelmean \
+   -template_brain MNI_3mm    \
+   -motion_censor dvars=5 \
+   -nuisance_regression 6motion,wm,csf,d6motion,dwm,dcsf \
+   -smoothing_kernel 5 \
+   -smoother susan \
+   # use default smoothing (5) and smoother (susan)
+
+
+
+   # these options are taken from the dicoms, hopefully
+   #-tr $TR -slice_acquisition $SEQ  \
+}
+

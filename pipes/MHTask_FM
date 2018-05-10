@@ -1,0 +1,102 @@
+#!/usr/bin/bash
+PIPE_FOR="OR"
+PIPE_DESC80="Initially for MMY1 EmoSnd with FM"
+PIPE_DESC="
+Generic task pipeline with Distortion Correction (FM)
+TODO: fd and dvars cutoff
+3mm template (specify in config!?)
+"
+PIPE_DEPENDS=("MHT1_2mm" "ppDistortion")
+PIPE_VERSION="20171114"
+FINALOUT=( "alltasks_preproc_complete" )
+
+function check_complete {
+ wantonlyoneid $@ || return 1
+ has_finalout  $1 || return 1
+ return 0
+}
+
+function run_pipeline {
+ id="$1"
+ [ -z "$id" ] && warn "$FUNCNAME: no id given" && return 1
+ #[ -z "$FM_CFG" ] && warn "$FUNCNAME: no FM_CFG in env!" && return 1
+
+ distortion_dir=$(cd ../ppDistortion/$id/unwarp; pwd)
+ [ -z "$distortion_dir" -o "$distortion_dir" == $(pwd) ] && warn "$id: no distortion dir" && return 1
+
+ [ ! -d "$id" ] && mkdir $id
+ cd $id
+
+ #ref=$(subj_ref $id)
+ #read mag phase < <(find_fm $id)
+ #mag="../../MHFM/$id/mrmag/MR*"
+ #phase="../../MHFM/$id/mrphase/MR*"
+ read bet warp  < <(find_t1final $id)
+ for v in bet warp; do # t2 mag phase 
+   [ -z "${!v}" ] && warn "# cannot find $v for $id" && return 1
+ done
+
+ # create nii.gz from analize fmt (img hdr)
+ # find inputs
+ nt2=$(subj_t2s $id |wc -l)
+ [  "$nt2" -eq 0 ] && warn "# $id: cannot find any t2s ($(pwd))" && return 1
+
+ maindir=$(pwd)
+
+
+ local cnt=0
+
+ # for each t2 (using 'subjs_ts $id | while read' makes cnt inaccessible)
+ while read t2nii name; do
+    [ -z "$t2nii" -o ! -r "$t2nii" ] && warn "# $id: provided t2 ('$t2nii') does not exist (task '$name')" && continue 
+    rundir=$maindir/$name
+    [ ! -d "$rundir" ] && mkdir "$rundir"
+    [ ! -e "$rundir/func.nii.gz" ] && ln -s "$t2nii" "$rundir/func.nii.gz"
+    cd "$rundir"
+    if [ -r .preprocessfunctional_complete ]; then 
+      let ++cnt
+      continue
+    else
+      warn "no file $(pwd)/.preprocessfunctional_complete"
+    fi
+
+    #-func_refimg functional_ref.nii.gz \
+    #-fm_cfg $FM_CFG \
+    #-fm_phase "$phase"  -fm_magnitude "$mag" \
+    #-nuisance_regression 6motion,d6motion,csf,dcsf,wm,dwm \
+    #-custom_slice_times /Volumes/Phillips/mMR_PETDA/scripts/sliceTimings.1D \
+    #-smoothing_kernel 5 \
+    yes | preprocessFunctional \
+       -tr $FUNCTR -slice_acquisition $FUNCSLICEACQ \
+       -4d func.nii.gz \
+       -mprage_bet $bet -warpcoef $warp \
+       -wavelet_despike  \
+       -wavelet_threshold 10 \
+       -4d_slice_motion  \
+       -distortion_dir "$distortion_dir" \
+       -hp_filter 40\
+       -rescaling_method 10000_globalmedian \
+       -template_brain MNI_3mm  \
+       -func_struc_dof bbr  \
+       -warp_interpolation spline  \
+       -constrain_to_template y  \
+       -motion_censor fd=0.5,dvars=5  \
+       -nuisance_file nuisance_regressors.txt \
+       -nuisance_compute 6motion,d6motion,csf,dcsf,wm,dwm  || echo "$(pwd): preprocessFunctional returned error!"
+
+   # success, so increment count
+   [ -r .preprocessfunctional_complete ] && let ++cnt
+ done < <( subj_t2s $id 2>/dev/null )
+
+ # track when finished
+ warn "have cnt=$cnt"
+ cd $maindir
+ if [ $cnt -eq $nt2 ]; then
+   echo "$(date) finished $nt2" >>  "alltasks_preproc_complete"
+ else
+  warn "$id finished preproc of only '$cnt' of '$nt2' tasks"
+  return 1
+ fi
+
+ return 0
+}

@@ -1,0 +1,67 @@
+#!/usr/bin/bash
+PIPE_FOR="DM FC"
+PIPE_DESC80="pet rest rac first (via mrinfo dbquery)"
+PIPE_DESC="
+"
+PIPE_DEPENDS=("MHT1_2mm" "MHFM" )
+PIPE_VERSION="20170712"
+FINALOUT=( ".preprocessfunctional_complete" )
+
+function check_complete {
+ wantonlyoneid $@ || return 1
+ has_finalout  $1 || return 1
+ return 0
+}
+
+function run_pipeline {
+ id="$1"
+ [ -z "$id" ] && warn "$FUNCNAME: no id given" && return 1
+ [ -z "$FM_CFG" ] && warn "$FUNCNAME: no FM_CFG in env!" && return 1
+
+
+ [ ! -d "$id" ] && mkdir $id
+ cd $id
+
+ # find inputs
+ t2=$(subj_t2 $id)
+ [ ! -r "$t2" ] && warn "# $id: cannot read t2 '$t2' ($(pwd))" && return 1
+ #ref=$(subj_ref $id)
+ #read mag phase < <(find_fm $id)
+ mag="../../MHFM/$id/mrmag/MR*"
+ phase="../../MHFM/$id/mrphase/MR*"
+ read bet warp  < <(find_t1final $id)
+ for v in t2 mag phase bet warp; do
+   [ -z "${!v}" ] && warn "# cannot find $v for $id" && return 1
+ done
+
+ # create nii.gz from analize fmt (img hdr)
+
+
+ #-func_refimg functional_ref.nii.gz \
+ # see /Volumes/Phillips/mMR_PETDA/scripts/pprestone.bash
+ preprocessFunctional \
+    -tr $FUNCTR -slice_acquisition $FUNCSLICEACQ \
+    -4d $t2 \
+    -mprage_bet $bet -warpcoef $warp \
+    -custom_slice_times /Volumes/Phillips/mMR_PETDA/scripts/sliceTimings.1D \
+    -wavelet_despike  \
+    -wavelet_threshold 10 \
+    -4d_slice_motion  \
+    -bandpass_filter 0.009 .08  \
+    -rescaling_method 10000_globalmedian \
+    -template_brain MNI_2.3mm  \
+    -func_struc_dof bbr  \
+    -warp_interpolation spline  \
+    -constrain_to_template y  \
+    -motion_censor fd=0.5,dvars=5  \
+    -smoothing_kernel 4 \
+    -nuisance_file nuisance_regressors.txt \
+    -nuisance_compute csf,dcsf,wm,dwm \
+    -nuisance_regression 6motion,d6motion,csf,dcsf,wm,dwm \
+    -fm_cfg $FM_CFG \
+    -fm_phase "$phase"  -fm_magnitude "$mag" \
+
+ check_complete $id || return 1
+
+ return 0
+}

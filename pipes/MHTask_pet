@@ -1,0 +1,159 @@
+#!/usr/bin/bash
+PIPE_FOR="OR"
+PIPE_DESC80="Initially for mMR PET Frog RPG task"
+PIPE_DESC="
+ use fieldmap
+ DOES NOT USE BBR
+"
+PIPE_DEPENDS=("MHT1_2mm" "ppDistortion")
+PIPE_VERSION="20180405"
+FINALOUT=( "alltasks_preproc_complete" )
+export AFNI_NO_OBLIQUE_WARNING=YES
+
+function check_complete {
+ wantonlyoneid $@ || return 1
+ has_finalout  $1 || return 1
+ return 0
+}
+
+# we did this once before probably
+# so don't do it all over again
+#/Volumes/Zeus/preproc/pet_frog/MHTask_pet/11414_20151107/6_seq22/
+#/Volumes/Phillips/mMR_PETDA/subjs/11414_20151107/func/6/
+raw_note_dir() { 3dNotes $1 | perl -lne 'print $2 if m:(raw/.*?|dev)/(.*?meas_672x672.[0-9]+).*:'; }
+get_prev_tm(){
+   local id=$1
+   local run=$2
+   [ -z "$2" ] && warn "$FUNCNAME: did not get id and run (but: $@)" && return 1
+   # files to copy/compare
+   local dir=/Volumes/Phillips/mMR_PETDA/subjs/$id/func/$run/
+   local cpstart=$(find $dir -maxdepth 1 -name "func_[0-9].nii.gz")
+   local niis="$dir/tm_func_[0-9].nii.gz $dir/tm_func_[0-9]_tmean.nii.gz $dir/mc_target.nii.gz"
+   local mots="$dir/mc_mats $dir/motion.par"
+
+   # check we have all the files we need
+   [ -z $cpstart ] && warn "no func in $dir; cannot copy tm_" && return 1
+   [ ! -r func.nii.gz ] && warn "$FUNCNAME: no $(pwd)/func.nii.gz; cannot check/copy tm_s" && return 1
+   for f in $niis $mots; do
+      [ ! -r $f ] && warn "do not have $f, will do tm_func the hard way" && return 1
+   done
+
+   # are both coming from the same place?
+   local raw1=$(raw_note_dir func.nii.gz)
+   local raw2=$(raw_note_dir $cpstart)
+   [ $raw1 != $raw2 ] && warn "raw dir mismatch! $raw1 vs $raw2" && return 1
+   # check our func is also LPI
+   [ "$( 3dinfo -orient func.nii.gz)" != "LPI" ] && warn "copymt: $(pwd)/func.nii.gz is not LPI!" && return 1
+
+   ## copy and orient!
+   for f in $niis; do
+      [ "$(3dinfo -orient $f)" != "LPI" ] && warn "copymt: $f is not LPI!" && return 1
+      # remove trailing run number from func file name
+      local to=$(basename $f)
+      to=${to/func_[0-9]/func}
+
+      #3dresample -orient RPI -input $f -prefix $to
+
+      [ -r "$to" ] && warn "already have $(pwd) $to" && continue
+      warn "copying $f to $(pwd)/$to"
+      cp $f $to
+   done
+   for f in $mots; do
+      [ ! -r $(basename $f) ] && cp -r $f ./
+   done
+   # create complete files
+   (date; echo "# copied from $dir") > .slice_timing_complete
+   (date; echo "# copied from $dir") > .motion_correction_complete
+}
+
+function run_pipeline {
+ id="$1"
+ [ -z "$id" ] && warn "$FUNCNAME: no id given" && return 1
+ #[ -z "$FM_CFG" ] && warn "$FUNCNAME: no FM_CFG in env!" && return 1
+
+ distortion_dir=$(cd ../ppDistortion/$id/unwarp; pwd)
+ [ -z "$distortion_dir" -o "$distortion_dir" == $(pwd) ] && warn "$id: no distortion dir" && return 1
+
+ [ ! -d "$id" ] && mkdir $id
+ cd $id
+
+ #ref=$(subj_ref $id)
+ #read mag phase < <(find_fm $id)
+ #mag="../../MHFM/$id/mrmag/MR*"
+ #phase="../../MHFM/$id/mrphase/MR*"
+ read bet warp  < <(find_t1final $id)
+ for v in bet warp; do # t2 mag phase 
+   [ -z "${!v}" ] && warn "# cannot find $v for $id" && return 1
+ done
+
+ # create nii.gz from analize fmt (img hdr)
+ # find inputs
+ nt2=$(subj_t2s $id |wc -l)
+ [  "$nt2" -eq 0 ] && warn "# $id: cannot find any t2s ($(pwd))" && return 1
+
+ maindir=$(pwd)
+
+
+ cnt=0
+ checkcomplete() {
+   let cnt+=$1
+   if [ $cnt -eq $nt2 ] ; then
+      cd $maindir
+      echo "$(date) finished $nt2" >>  "alltasks_preproc_complete"
+   fi
+ }
+
+ # for each t2 (using 'subjs_ts $id | while read' makes cnt inaccessible)
+ subj_t2s $id 2>/dev/null | while read t2nii name; do
+    [ -z "$t2nii" -o ! -r "$t2nii" ] && warn "# $id: provided t2 ('$t2nii') does not exist (task '$name')" && continue 
+    rundir=$maindir/$name
+    [ ! -e "$t2nii" ] && warn "subj_t2s lied! $t2nii DNE!" && continue
+    [ ! -d "$rundir" ] && mkdir "$rundir"
+    [ ! -e "$rundir/func.nii.gz" ] && ln -s "$t2nii" "$rundir/func.nii.gz"
+
+    cd "$rundir"
+    runno=${name%%_*} # like 1_seq9 to 1
+    refimg=$(subj_ref_func $id $runno)
+    [ -z "$refimg" -o ! -r "$refimg" ] && warn "$(pwd): no refimage for $id $runno: $refimg" && continue
+    get_prev_tm $id $runno || echo "no TM_* copy; doing it the slow way!"
+    if [ -r .preprocessfunctional_complete ]; then 
+      checkcomplete 1
+      warn "have complete file in $(pwd), set cnt to $cnt"
+      continue
+    else
+      warn "no file $(pwd)/.preprocessfunctional_complete"
+    fi
+
+   yes | preprocessFunctional \
+      -tr $FUNCTR \
+      -func_refimg $refimg \
+      -4d func.nii.gz  \
+      -mprage_bet $bet -warpcoef $warp \
+      -custom_slice_times $TIMING1D  \
+      -wavelet_despike \
+      -4d_slice_motion \
+      -threshold 98_2 \
+      -hp_filter 80 \
+      -rescaling_method 100_voxelmean \
+      -template_brain MNI_2.3mm \
+      -warp_interpolation spline \
+      -constrain_to_template y \
+      -motion_censor fd=0.9,dvars=21 \
+      -distortion_dir "$distortion_dir" \
+      -verbose \
+      $addparms
+      #-func_struc_dof bbr \
+
+   # success, so increment count
+   [ -r .preprocessfunctional_complete ] && echo "compelted sucessfully" && checkcomplete 1
+ done 
+
+ cd $maindir
+ newct=$(ls */.preprocessfunctional_complete|wc -l)
+ if [ ! -r alltasks_preproc_complete ]; then
+    warn "$id finished preproc of only '$newcnt' ($cnt) of '$nt2' tasks; no $(pwd)/alltasks_preproc_complete file"
+    return 1
+ fi
+
+ return 0
+}
