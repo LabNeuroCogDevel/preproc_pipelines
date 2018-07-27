@@ -1,0 +1,241 @@
+#!/usr/bin/env bash
+SOURCE_DESC80="mMR DA PET first rest in session 1 (rac tracer)"
+
+_PETEPISUFFIX=rac_frog
+SLICESETTINGSFILE=/Volumes/Phillips/mMR_PETDA/scripts/sliceTimings.1D 
+TIMING1D=$SLICESETTINGSFILE
+
+# look up matching directoires for each functional
+#	  1) lunaid
+#	  2) func_num
+#	  3) funcs.dir as func
+#	  4) funcs.sbref as sbref
+#	  5) fm_func.fmmag
+#	  6) fm_func.fmphase
+_dbquery() {
+   Rscript $(cd $(dirname ${BASH_SOURCE[0]});pwd)/../scripts/pet_frog_list.R
+#  sqlite3 -separator $'\t' /Volumes/Zeus/mr_sqlite/db "
+# with
+#  sbref as (
+#  select 
+#    id, sessionname, seqno, Name, dir 
+#   from mrinfo 
+#   where study like 'pet' and 
+#     dir like '%SBRef%' and 
+#     ndcm = 1  and 
+#     id not like '304-00-0009'
+#  ),
+#  idv_func as (
+#   select
+#    * 
+#   from mrinfo
+#   where 
+#    study like 'pet' and 
+#    Name like '%BOLD_x%' and 
+#    ndcm = 200  and 
+#    id not like '304-00-0009'
+#  ),
+#  funcs as (
+#   select 
+#    idv_func.id, 
+#    idv_func.sessionname, 
+#    idv_func.seqno, 
+#    idv_func.Name, 
+#    idv_func.dir,
+#    sbref.dir as sbref,
+#    sbref.Name as sbref_name,
+#    sbref.seqno as sbref_seqno
+#   from idv_func
+#   join sbref on 
+#      idv_func.sessionname = sbref.sessionname
+#      and idv_func.id = sbref.id 
+#      and idv_func.Name = sbref.Name 
+#      AND idv_func.seqno - sbref.seqno = 1
+#  ),
+#  func_count as (
+#   select
+#    id, sessionname,
+#    count(*) as nfuncs,
+#    min(seqno) as start_seqno,
+#    max(seqno) as last_seqno
+#   from funcs 
+#   group by id,sessionname 
+#  ),
+#  -- fieldmap: match phase and magnitude
+#  fm_mag as (
+#  select patname,id,sessionname,seqno,dir
+#   from mrinfo 
+#   where study like 'pet' and Name like 'gre_field_mapping' and ndcm = 90
+#  ),
+#  fm_phase as (
+#  select patname,id,sessionname,seqno,dir
+#   from mrinfo 
+#   where study like 'pet' and Name like 'gre_field_mapping' and ndcm = 45
+#  ), 
+#  fm_mag_phase_match as (
+#   select 
+#    m.patname, m.id, m.sessionname,
+#    m.dir as fmmag,p.dir as fmphase,
+#    m.seqno as magseqno,
+#    p.seqno as phaseseqno
+#   from fm_mag as m 
+#   inner join fm_phase as p on m.id=p.id and m.patname=p.patname and m.sessionname=p.sessionname
+#   where m.seqno + 1 = p.seqno 
+#  ),
+#  fm_func as (
+#    SELECT
+#    abs(magseqno - start_seqno) as mag_func_dist,
+#    *
+#    from fm_mag_phase_match as fm
+#    join func_count as func on fm.sessionname = func.sessionname and fm.id = func.id 
+#  ),
+#  best_fm_func as (
+#    select 
+#     id,
+#     sessionname,
+#     min(mag_func_dist) as bestdist,
+#     min(fm_func.magseqno) as firstfieldmap 
+#    from fm_func group by id,sessionname 
+#  ),
+#  all_dirs as (
+# 	 select
+# 	  substr(fm_func.patname,1,14) as lunaid,
+# 	  substr(funcs.Name,12,1) || '_seq' || funcs.seqno as func_num,
+# 	  -- funcs.sessionname,
+# 	  -- fm_func.patname,
+# 	  -- funcs.seqno,
+# 	  -- sbref_seqno,
+# 	  -- fm_func.magseqno as magseqno,
+# 	  funcs.dir as func,
+# 	  funcs.sbref as sbref,
+# 	  fm_func.fmmag,
+# 	  fm_func.fmphase
+# 	 from fm_func
+# 	 join best_fm_func as b on
+# 	    b.id = fm_func.id and
+# 	    b.sessionname = fm_func.sessionname and 
+# 	    b.firstfieldmap = fm_func.mag_func_dist -- CHANGE HERE 'bestdist' insetad of firstfieldmap
+# 	 join funcs on 
+# 	   fm_func.sessionname = funcs.sessionname 
+# 	   and fm_func.id = funcs.id
+#  )
+#  select * from all_dirs order by lunaid, func_num;
+# "
+}
+
+SUBJECTS_DIR="/Volumes/Phillips/mMR_PETDA/FS"
+DICOM_PAT="MR*"
+
+FUNCTR="1.5"
+FUNCSLICEACQ="seqasc"
+
+# where is raw data, mostly ignored in favor of sqlite db
+MRROOT="/Volumes/Phillips/Raw/MRprojects/mMRDA-dev/"
+
+FM_CFG=pet
+FMNMAG=90
+FMNPHS=45
+
+
+
+# list name and directory for matching lunaid_date
+_epimrpaths() {
+ _dbquery | grep ^$1 |  cut -f2,3
+}
+####
+
+function list_all {
+ _dbquery | cut -f1
+}
+
+# for MHT1_2mm , subj_t1 can be dicomdir -- dicoms will be linked into cwd and then deleted (same as final output)
+function subj_t1 {
+ wantonlyoneid $@ || return 1
+ #file_exists_test "$SUBJECTS_DIR/$1/mri/T1.mgz"
+ subj_MRT1 $1
+}
+
+# Want G2 but in year 2 we dont have, so will settle for G1
+function subj_MRT1 {
+ wantonlyoneid $@ || return 1
+ mrpath=$(_epimrpaths $1|sed 1q | cut -f2 )
+
+ # we have two 
+ # pick this over 34 over 11616_20170807/Sagittal_MPRAGE_ADNI_G2_256x240.25
+ if [[ "$1" = 11616_20170807 ]]; then
+  echo /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2017.08.07-14.17.11/11616_20170807/Sagittal_MPRAGE_ADNI_G2_256x240.34
+  return 0
+ fi
+
+ subj_mr_pat "$(cd $mrpath/..;pwd)"  'Sagittal_MPRAGE_ADNI_G2_256x240*' 176 ||
+  subj_mr_pat "$(cd $mrpath/..;pwd)"  'Sagittal_MPRAGE_ADNI_256x240*' 160 || return 1
+ #subj_mr_pat $MRROOT/$1 'axial_mprage_256x208*' 176 || return 1
+}
+
+# segemention mask from freesurfer
+function subj_FS_aseg {
+ wantonlyoneid $@ || return 1
+ file_exists_test "$SUBJECTS_DIR/$1/mri/aseg.mgz"
+}
+
+# return nii.gz and task name
+# might have to make nii.gz first
+# 
+function subj_t2s {
+ wantonlyoneid $@ || return 1
+ ld=$1
+ maindir=$(pwd)
+ _epimrpaths $1 | while read outname rawdir; do
+   [ ! -d $rawdir ] && warn "$ld: raw DNE $rawdir" && continue
+   epi=$maindir/$outname/func.nii.gz
+   [ -r "$epi" ] && continue
+   [ ! -d $(dirname $epi) ] && mkdir $(dirname $epi)
+   cmd="dcm2niix -o '$maindir/$outname' -f func $rawdir"
+   [ ! -r "$epi" ] && eval $cmd >&2 && 3dNotes -h "$cmd" $epi >&2 
+
+   [ ! -r "$epi" ] && warn "$FUNCNAME: failed to make $epi!" && return 1
+   [ $(3dinfo -orient $epi) != "LPI" ] && 3dresample -orient LPI -input $epi -prefix $epi -overwrite
+
+ done
+ ls $maindir/*/func.nii.gz |sed "s;^$maindir/\(.*\)/func.nii.gz$;& \1;"
+}
+
+# will take directory instead of lunaid
+function subj_ref {
+ return 1
+ # todo: need to find how to id by func run
+ wantonlyoneid $@ || return 1
+ # ref is the 4th column in dbquery
+ _dbquery | awk "(\$1 ~/$1/){print \$4}"
+}
+
+# given id and func name
+# spit out ref img -- might make
+subj_ref_func() {
+ [[ ! "$(pwd)" =~ $2 ]] && warn "gen ref: pwd ($PWD) not like $2, confused" && return 1
+ [ -r ref.nii.gz ] && echo ref.nii.gz && return 0
+ refdir=$(_dbquery | awk "(\$1 ~ /$1/ && \$2 ~ /$2/){print \$4}")
+ [ -z "$refdir" ] && warn "no ref for $1 $2" && return 1
+ cmd="dcm2niix -o './' -f ref $refdir"
+ # ref comes out as ref_e2, fix that
+ # leave json file alone
+ eval $cmd >&2 &&
+ for ext in json nii.gz; do
+   [ -r ref_e2.$ext ] && mv ref_e2.$ext ref.$ext
+ done
+ [ ! -r "ref.nii.gz" ] && warn "$FUNCNAME: unable to make ref.nii.gz ($PWD) from $1 $2" && return 1
+ 3dNotes -h "$cmd" ref.nii.gz >&2
+ [ "$(3dinfo -orient ref.nii.gz)" != "LPI" ] && warn "resampling $(pwd)/ref.nii.gz" && \
+    3dresample -orient LPI -input ref.nii.gz -prefix ref.nii.gz -overwrite
+ echo ref.nii.gz
+}
+
+function subj_physio {
+ wantonlyoneid $@ || return 1
+}
+
+function subj_fm {
+ wantonlyoneid $@ || return 1
+ _dbquery |grep $1 | cut -f5,6|sed 1q
+}
+
