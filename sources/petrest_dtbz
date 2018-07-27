@@ -1,0 +1,261 @@
+#!/usr/bin/env bash
+# use rac1 as a template
+rac1file=$(dirname ${BASH_SOURCE})/petrest_rac1
+[ ! -r $rac1file ] && echo "cannot find '$rac1file'" >&2 && exit 1
+source $rac1file
+
+SOURCE_DESC80="mMR DA PET rest session 2 (dtbz tracer)"
+
+_PETEPISUFFIX=dtbzrest
+
+# look up e*rest* directories from pet study in the mr protocol database
+# select the last rest with more than 200 dicoms for ids that have a B in them (only rac+dtbz people)
+# only the last session and only where there are two sessions on the same day
+_dbquery() {
+ sqlite3 -separator $'\t' /Volumes/Zeus/mr_sqlite/db "
+ with
+ -- kid or adult
+ cohort as (
+  select id,
+   substr(patname,1,14) as ld8,
+   case substr(id,1,1)
+     when 'B' then 'adult'
+     else          'kid'
+   end as cohort
+  from mrinfo
+  where study like 'pet'
+  group by id
+ ),
+ -- how many funcs in this session
+ func_count as (
+  select id,sessionname,count(*) as nfuncs 
+  from mrinfo 
+  where study like 'pet' and Name like '%BOLD_x%' and ndcm = 200 
+  group by id,sessionname 
+ ),
+ -- how many dsi in session
+ dsi_count as (
+  select id,sessionname,count(*) as ndsi 
+  from mrinfo 
+  where study like 'pet' and Name like '%diff_DSI%' and ndcm = 113 
+  group by id,sessionname
+ ),
+ -- how many rests in this session and 
+ -- seq no of first and last rest
+ all_pet_rest as (
+  select patname,id,sessionname,count(*) as nrest,
+   min(seqno) as firstrest, 
+   max(seqno) as lastrest
+  from mrinfo 
+  where study like 'pet' and 
+   Name like '%BOLD_rest%'  and 
+   ndcm = 320 
+  group by id,patname,sessionname
+ ),
+ -- cumulative count information
+ session_info as (
+  select ap.*,nfuncs, ndsi, cohort, ld8
+   from all_pet_rest as ap
+   join cohort on cohort.id = ap.id
+   left join func_count as fc
+    on ap.id=fc.id  and ap.sessionname = fc.sessionname
+   left join dsi_count as nd
+    on ap.id=nd.id  and ap.sessionname = nd.sessionname
+ ),
+ -- fieldmap: match phase and magnitude
+ fm_mag as (
+ select patname,id,sessionname,seqno,dir
+  from mrinfo 
+  where study like 'pet' and Name like 'gre_field_mapping' and ndcm = 90
+ ),
+ fm_phase as (
+ select patname,id,sessionname,seqno,dir
+  from mrinfo 
+  where study like 'pet' and Name like 'gre_field_mapping' and ndcm = 45
+ ), 
+ fm_match as (
+  select m.patname,m.id,m.sessionname, 
+   m.dir as fmmag,p.dir as fmphase, 
+   m.seqno as magseqno,
+   p.seqno as phaseseqno
+  from fm_mag as m 
+  inner join fm_phase as p 
+    on m.id=p.id and m.patname=p.patname 
+    and m.sessionname=p.sessionname
+  where m.seqno + 1 = p.seqno 
+ ),
+ ignore_rest_pick1 as (select * from session_info si 
+  join fm_match m 
+    on m.id=si.id and m.sessionname = si.sessionname
+  where cohort == 'adult'
+ ),
+rest_pick as ( 
+ select
+  ld8, cohort,
+  si.sessionname, 
+  mi.dir, mi.seqno, mi.Name,
+  nrest, ndsi, nfuncs
+  from session_info as si
+  join mrinfo as mi 
+    on si.id=mi.id 
+    and si.sessionname = mi.sessionname
+    and mi.seqno = firstrest
+   where
+    cohort == 'adult'
+    and ndsi >= 1
+),
+-- put rest and fm together
+fm_rest as (
+ select abs(seqno - magseqno) as diff, * 
+ from rest_pick as rp 
+ join fm_match as fm on  rp.sessionname=fm.sessionname
+ order by ld8,diff
+),
+-- find the closest fm to the rest
+best_match_no as (
+ select 
+  sessionname, min(diff) as closestdiff 
+  from fm_rest 
+  group by sessionname
+)
+-- give lunaid rest and fm dirs: mag is 2x as large (mag1,mag2) and before phase
+select ld8,dir as restdir,fmmag,fmphase,diff,ndsi, nfuncs, cohort 
+  from fm_rest 
+  join best_match_no on closestdiff=diff and fm_rest.sessionname = best_match_no.sessionname
+";
+
+#ls -d /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2016.09.30-11.10.05/*/*{rest,field,MPRAGE}*
+# echo "11576_20160930 /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2016.09.30-11.10.05/B0160/ep2d_BOLD_resting_320meas_672x672.7 /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2016.09.30-11.10.05/B0160/gre_field_mapping_96x96.8 /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2016.09.30-11.10.05/B0160/gre_field_mapping_96x96.9 0 0 adult
+# 11459_20160121 /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2016.01.21-11.13.08/B0107/ep2d_BOLD_resting_320meas_672x672.7 /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2016.01.21-11.13.08/B0107/gre_field_mapping_96x96.8 /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2016.01.21-11.13.08/B0107/gre_field_mapping_96x96.9 0 0 adult" |tr ' ' $'\t'
+_fromdir 11459_20160121 /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2016.01.21-11.13.08/B0107/  ep2d_BOLD_resting_320meas_672x672.7  gre_field_mapping_96x96.8 gre_field_mapping_96x96.9
+
+}
+_fromdir(){
+   id="$1";shift
+   d="$1";shift # /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2016.01.21-11.13.08/B0107
+   rest="$1"; shift # ep2d_BOLD_resting_320meas_672x672.7 
+   fm1="$1"; shift
+   fm2="$1"; shift
+   echo "$id $d/$rest $d/$fm1 $d/$fm2 0 0 adult" |tr ' ' $'\t'
+}
+
+##   SUBJECTS_DIR="/DNE/"
+##   DICOM_PAT="MR*"
+##   
+##   FUNCTR="1.5"
+##   FUNCSLICEACQ="seqasc"
+##   
+##   # where is raw data, mostly ignored in favor of sqlite db
+##   MRROOT="/Volumes/Phillips/Raw/MRprojects/mMRDA-dev/"
+##   
+##   FM_CFG=pet
+##   FMNMAG=90
+##   FMNPHS=45
+##   
+##   # look up e*rest* directories from pet study in the mr protocol database
+##   # select the last rest with more than 200 dicoms for ids that have a B in them (only rac+dtbz people)
+##   # only the last session and only where there are two sessions on the same day
+##   _dbquery() {
+##    sqlite3 -separator $'\t' /Volumes/Zeus/mr_sqlite/db '
+##      with last_rest_in_scan as (
+##         select 
+##           rowid,
+##           id,date,sessionname,seqno,dir,
+##           substr(patname,1,14) as lunadate8
+##         from mrinfo 
+##         where 
+##          study like "pet" and 
+##          Name like "e%rest%" and 
+##          ndcm>200 and 
+##          id like "B%" 
+##         group by id,sessionname
+##         having max(seqno)
+##        ),
+##        max_and_min_session_name as ( 
+##         select 
+##           id, date, 
+##           max(sessionname) as max_sessionname,
+##           min(sessionname) as min_sessionname,
+##           count(*) as nsessions
+##         from last_rest_in_scan 
+##         group by id,date
+##        )
+##      select 
+##       lrs.lunadate8,
+##       lrs.id, lrs.date, lrs.sessionname, lrs.seqno, lrs.dir 
+##       from  
+##        last_rest_in_scan as lrs 
+##       join 
+##        max_and_min_session_name as mmsn
+##       on 
+##        lrs.date = mmsn.date and 
+##        lrs.id = mmsn.id and
+##        mmsn.max_sessionname  = lrs.sessionname
+##       where 
+##          nsessions > 1 and 
+##          seqno < 10;
+##   ';
+##   }
+##   
+##   _epimrpath() {
+##    mrpath=$(_dbquery | grep $1 |  cut -f6)
+##    [ -z "$mrpath" -o ! -r $mrpath ] && echo "$1 has bad entry in db '$mrpath'" >&2 && return 1
+##    echo $mrpath
+##   }
+##   ####
+##   
+##   function list_all {
+##    _dbquery | cut -f1
+##   }
+##   
+##   # for MHT1_2mm , subj_t1 can be dicomdir -- dicoms will be linked into cwd and then deleted (same as final output)
+##   function subj_t1 {
+##    wantonlyoneid $@ || return 1
+##    #file_exists_test "$SUBJECTS_DIR/$1/mri/T1.mgz"
+##    subj_MRT1 $1
+##   }
+##   
+##   function subj_MRT1 {
+##    wantonlyoneid $@ || return 1
+##    mrpath=$(_epimrpath $1)
+##    subj_mr_pat "$(cd $mrpath/..;pwd)"  'Sagittal_MPRAGE_ADNI_G2_256x240*' 176 || return 1
+##    #subj_mr_pat $MRROOT/$1 'axial_mprage_256x208*' 176 || return 1
+##   }
+##   
+##   # segemention mask from freesurfer
+##   function subj_FS_aseg {
+##    return 1
+##    wantonlyoneid $@ || return 1
+##    file_exists_test "$SUBJECTS_DIR/$1/mri/aseg.mgz"
+##   }
+##   
+##   function subj_t2 {
+##    wantonlyoneid $@ || return 1
+##    mrpath=$(_epimrpath $1) || return 1
+##    epi=${1}_dtbzrest.nii.gz
+##    cmd="dcmstack --include '.*' --file-ext '$DICOM_PAT'  --embed-meta -o $(basename $epi .nii.gz) --dest-dir . $mrpath"
+##    [ ! -r "$epi" ] && $cmd && 3dNotes -h "$cmd" $epi
+##   
+##    [ ! -r "$epi" ] && return 1
+##    echo $(pwd)/$epi
+##   }
+##   function subj_ref {
+##    wantonlyoneid $@ || return 1
+##    return 1
+##   }
+##   function subj_physio {
+##    wantonlyoneid $@ || return 1
+##   }
+##   
+##   function subj_fm {
+##    wantonlyoneid $@ || return 1
+##   
+##    local epipath=$( _dbquery |grep $1 | cut -f 6)
+##    [ -z "$epipath" ] && echo "$1: epipath ('$epipath') DNE" >&2 && return 1
+##    local path=$(dirname $epipath)
+##    mag=$(subj_mr_pat $path 'gre_field_mapping*' $FMNMAG)
+##    [ -z "$mag" ] && return 1
+##    phase=$(subj_mr_pat $path 'gre_field_mapping*' $FMNPHS)
+##    [ -z "$phase" ] && return 1
+##    echo "$mag $phase"
+##   }

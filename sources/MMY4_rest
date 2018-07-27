@@ -1,0 +1,196 @@
+#!/usr/bin/env bash
+# 80 char description
+SOURCE_DESC80="Multimodal rest w/multiband and fieldmaps for year 4"
+
+SUBJECTS_DIR="/data/Luna1/MM/FS_Subjects/"
+DICOM_PAT="MR*"
+
+FUNCTR="1"
+FUNCSLICEACQ="seqasc"
+
+MRROOT="/Volumes/Phillips/Raw/MRprojects/MultiModal/"
+
+# which field map config settings 
+# switch uses clock
+FM_CFG=clock
+
+function list_all {
+echo "
+10662
+10772
+10811
+10843
+11177
+11262
+11299
+11322
+11338
+11342
+11346
+11362
+11366
+11370
+11372
+11373
+11375
+11376
+11377
+11379
+11380
+11381
+11383
+11384
+11385
+11387
+11388
+11389
+11391
+11394
+11395
+11397
+11398
+11401
+11403
+11404
+11405
+11408
+11409
+11410
+11411
+11412
+11414
+11415
+11419
+11421
+11422
+11425
+11426
+11428
+11434
+11435
+11438
+11440
+11442
+11450
+11451
+11455
+11456
+11462
+11464
+11468
+11488" | while read subj; do
+ [ -z "$subj" ] && continue
+ dir=$(find $MRROOT/multiband -maxdepth 1 -type d -iname "*$subj*" -not -name '*2014*' |sort -r | sed 1q)
+ [ -z "$dir" ] && echo "cannot find dir $subj: $MRROOT/multiband/*$subj*" >&2 && continue
+ [[ $dir =~ ([0-9]{5})[_-]([0-9]{8}) ]] || continue
+ echo "${BASH_REMATCH[1]}_${BASH_REMATCH[2]}"
+done
+}
+
+
+# find a multiband directory for id (expect id to be luna_date
+function find_mb {
+ id=$1
+ mrfile=$2
+ [ -z "$2" ] && warn "$FUNCNAME expects 2 arguemnts" && return 1
+ 
+ if [[ ! "$id" =~ ([0-9]{5})_([0-9]{8}) ]] ; then
+    warn "$FUNCNAME wants an id like luna_date, got $id"
+    return 1
+ fi
+ local idnodate=${BASH_REMATCH[1]}
+ local vdate=${BASH_REMATCH[2]}
+
+ local mmddyyyy=${vdate:4:4}${vdate:0:4}
+ local patt="WPC5640*$mmddyyy*$idnodate*"
+
+ ## special mods for ambigious subjects
+
+ # clock instead of Y4
+ # [ "$id" == "11278_20140519" ] && patt="WPC5640-05192014-11278"
+ # [ "$id" == "11336_20141204" ] && patt="WPC5640-12042014-11336_20141204"
+
+ # # WPC5640-08282014-11318_20140828, ambigious b/c run twice, first without rest
+ # [ "$id" == "11318_20140828" ] && patt="WPC5640-08282014-11318_20140828"
+
+ # [ "$id" == "11342_20150228" ] && patt="WPC5640-02282015-11342"
+
+
+ local mbdirs=( $(find $MRROOT/multiband -type d -maxdepth 1 -iname $patt) )
+ if ! checkarraycount 1 ${mbdirs[@]} ; then
+   warn "not exactly one match to $MRROOT/multiband/$patt"  
+   return 1
+ fi
+
+ local mbfiles=( $(find $mbdirs -maxdepth 1 -iname "$mrfile") )
+ ! checkarraycount 1 ${mbfiles[@]} && warn "mb file issue: $mbdirs/$mrfile" && return 1
+ echo $mbfiles
+
+}
+
+function subj_t1 {
+ wantonlyoneid $@ || return 1
+
+ ## special cases for special subjects (rescans or other ambigiousness)
+
+ # use 19 instead of 4 #2015.02.28-12.46.17/11342_20150228/MPRAGE_axial_32ch_good_256x192.19
+ if [ "$1" == "11342_20150228" ]; then
+   echo "$MRROOT/2015.02.28-12.46.17/$1/MPRAGE_axial_32ch_good_256x192.19"
+   return 0
+
+ # use 6 isntead of 4 # 2014.12.13-11.52.34/11343_20141213/MPRAGE_axial_32ch_good_256x192.6
+ elif [ "$1" == "11343_20141213" ]; then
+   echo "$MRROOT/2014.12.13-11.52.34/11343_20141213/MPRAGE_axial_32ch_good_256x192.6"
+   return 0
+ # use first scan, second does not have an mprage
+ elif [ "$1" == "11323_20141126" ]; then
+   echo "$MRROOT/2014.11.26-10.29.42/11323_20141126/MPRAGE_axial_32ch_good_256x192.4"
+   return 0
+ elif [ "$1" == "11318_20140828" ]; then
+   echo "$MRROOT/2014.08.28-14.51.01/11318_20140828/MPRAGE_axial_32ch_good_256x192.4"
+   return 0
+ fi
+
+ subj_mr_pat $MRROOT/*/$1 'MPRAGE_axial_32ch_good_256x192*' 192 || return 1
+ return 0
+}
+
+function subj_t2 {
+ wantonlyoneid $@ || return 1
+ find_mb $id "*ep2d_MB_rest*_MB.hdr" || return 1
+ return 0
+}
+
+function subj_ref {
+ wantonlyoneid $@ || return 1
+ find_mb $id "*ep2d_MB_rest*_ref.hdr" || return 1
+ return 0
+}
+
+# find field warping
+#  ls /Volumes/Phillips/Raw/MRprojects/MultiModal/*/11265_20141006/gre_field_mapping_new_96x90.14/MR* |wc -l #120
+#  ls /Volumes/Phillips/Raw/MRprojects/MultiModal/*/11265_20141006/gre_field_mapping_new_96x90.15/MR* |wc -l #60
+function subj_fm {
+ wantonlyoneid $@ || return 1
+
+ local path=($MRROOT/*/$1)
+ warn "$FUNCNAME: looking for ${path[@]}"
+
+ # 11323_20141126 
+ # Run 4 - stopped scan 3/4 way thru bc sub pressed alarm ball accidentally. Siemens comp froze about 1 min into rest, had to reboot exam app and rerun loc, BOLD scout, and rest. Sub performed okay, required frequent breaks
+ [ "$1" == "11323_20141126" ] && path=("$MRROOT/2014.11.26-10.29.42/11323_20141126")
+ 
+
+ [ ${#path[@]} -gt 1 ] && warn "$FUNCNAMME: $1 has too many possible paths (${#path[@]}): ${path[@]}" && return 1
+ 
+ mag=$(subj_mr_pat $path 'gre_field_*' 120)
+ [ -z "$mag" ] && return 1
+ phase=$(subj_mr_pat $path 'gre_field_*' 60)
+ [ -z "$phase" ] && return 1
+ echo "$mag $phase"
+}
+
+function subj_physio {
+ wantonlyoneid $@ || return 1
+ return 0
+}

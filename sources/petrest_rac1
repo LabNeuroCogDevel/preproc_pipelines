@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+SOURCE_DESC80="mMR DA PET first rest in session 1 (rac tracer)"
+
+_PETEPISUFFIX=racrest1
+SLICESETTINGSFILE=/Volumes/Phillips/mMR_PETDA/scripts/sliceTimings.1D 
+
+# look up e*rest* directories from pet study in the mr protocol database
+# select the last rest with more than 200 dicoms for ids that have a B in them (only rac+dtbz people)
+# only the last session and only where there are two sessions on the same day
+# merge with the closest fieldmap mag and phase
+# output columns:
+#  lunadate8 restepidir fmmagdir fmphasedir rest2magSeqNoDiff
+_dbquery() {
+ sqlite3 -separator $'\t' /Volumes/Zeus/mr_sqlite/db "
+with 
+ func_count as (
+  select id,sessionname,count(*) as nfuncs 
+  from mrinfo 
+  where study like 'pet' and Name like '%BOLD_x%' and ndcm = 200 
+  group by id,sessionname 
+ ),
+ all_pet_rest as (
+  select patname,id,sessionname,count(*) as nrest, min(seqno) as firstrest,  max(seqno) as lastrest
+  from mrinfo 
+  where study like 'pet' and Name like '%BOLD_rest%'  and ndcm = 320 
+  group by id,patname,sessionname
+ ),
+ rest_task_count as (
+ select ap.*,nfuncs
+   from all_pet_rest as ap
+   left join func_count as fc
+    on ap.id=fc.id  and ap.sessionname = fc.sessionname 
+ ),
+ -- fieldmap: match phase and magnitude
+ fm_mag as (
+ select patname,id,sessionname,seqno,dir
+  from mrinfo 
+  where study like 'pet' and Name like 'gre_field_mapping' and ndcm = 90
+ ),
+ fm_phase as (
+ select patname,id,sessionname,seqno,dir
+  from mrinfo 
+  where study like 'pet' and Name like 'gre_field_mapping' and ndcm = 45
+ ), 
+ fm_match as (
+  select m.patname,m.id,m.sessionname, m.dir as fmmag,p.dir as fmphase, m.seqno as magseqno ,p.seqno as phaseseqno
+  from fm_mag as m 
+  inner join fm_phase as p on m.id=p.id and m.patname=p.patname and m.sessionname=p.sessionname
+  where m.seqno + 1 = p.seqno 
+ ),
+ -- pick the rest we want
+ rest_pick as (
+ select substr(mi.patname,1,14) as ld8, 
+  rtc.sessionname, mi.dir,mi.seqno, nrest
+  from rest_task_count as rtc 
+  join mrinfo as mi on rtc.id=mi.id and mi.sessionname = rtc.sessionname
+   -- LOOK HERE: determine which rest we want  
+   and mi.seqno=rtc.firstrest
+ where
+    nfuncs is not null
+    and nrest = 2  
+),
+-- put rest and fm together
+fm_rest as (
+ select abs(seqno - magseqno) as diff, * from rest_pick as rp 
+ join fm_match as fm on  rp.sessionname=fm.sessionname
+ order by ld8,diff
+),
+-- find the closest fm to the rest
+best_match_no as (
+ select sessionname, min(diff) as closestdiff from fm_rest group by sessionname
+)
+-- give lunaid rest and fm dirs: mag is 2x as large (mag1,mag2) and before phase
+select ld8,dir as restdir,fmmag,fmphase,diff 
+  from fm_rest 
+  join best_match_no on closestdiff=diff and fm_rest.sessionname = best_match_no.sessionname
+";
+}
+
+SUBJECTS_DIR="/Volumes/Phillips/mMR_PETDA/FS"
+DICOM_PAT="MR*"
+
+FUNCTR="1.5"
+FUNCSLICEACQ="seqasc"
+
+# where is raw data, mostly ignored in favor of sqlite db
+MRROOT="/Volumes/Phillips/Raw/MRprojects/mMRDA-dev/"
+
+FM_CFG=pet
+FMNMAG=90
+FMNPHS=45
+
+
+
+_epimrpath() {
+   # 20170719 - remove when duplicate becaue path has e.g. a/b and a//b
+ mrpath=$(_dbquery | grep $1 |  cut -f2| sed 's:/\+:/:g' | uniq )
+ [ -z "$mrpath" -o ! -r "$mrpath" ] && echo -e "$1 has bad entry in db:\n$mrpath\n" >&2 && return 1
+ echo $mrpath
+}
+####
+
+function list_all {
+ _dbquery | cut -f1
+}
+
+# for MHT1_2mm , subj_t1 can be dicomdir -- dicoms will be linked into cwd and then deleted (same as final output)
+function subj_t1 {
+ wantonlyoneid $@ || return 1
+ #file_exists_test "$SUBJECTS_DIR/$1/mri/T1.mgz"
+ subj_MRT1 $1
+}
+
+# Want G2 but in year 2 we dont have, so will settle for G1
+function subj_MRT1 {
+ wantonlyoneid $@ || return 1
+ mrpath=$(_epimrpath $1)
+
+ # we have two 
+ # pick this over 34 over 11616_20170807/Sagittal_MPRAGE_ADNI_G2_256x240.25
+ if [[ "$1" = 11616_20170807 ]]; then
+  echo /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2017.08.07-14.17.11/11616_20170807/Sagittal_MPRAGE_ADNI_G2_256x240.34
+  return 0
+ fi
+
+ subj_mr_pat "$(cd $mrpath/..;pwd)"  'Sagittal_MPRAGE_ADNI_G2_256x240*' 176 ||
+  subj_mr_pat "$(cd $mrpath/..;pwd)"  'Sagittal_MPRAGE_ADNI_G2_256x256*' 176 || # 11459_20160121
+  subj_mr_pat "$(cd $mrpath/..;pwd)"  'Sagittal_MPRAGE_ADNI_256x240*' 160 || return 1
+ #subj_mr_pat $MRROOT/$1 'axial_mprage_256x208*' 176 || return 1
+}
+
+# segemention mask from freesurfer
+function subj_FS_aseg {
+ wantonlyoneid $@ || return 1
+ file_exists_test "$SUBJECTS_DIR/$1/mri/aseg.mgz"
+}
+
+function subj_t2 {
+ wantonlyoneid $@ || return 1
+ mrpath=$(_epimrpath $1) || return 1
+ epi=${1}_${_PETEPISUFFIX}.nii.gz
+
+ # kludgy hack if we have func.nii.gz in current directory, dont do anything
+ # 20180417 -- for brnssuwdktm_rest
+ [ -n "$SKIPDCM2NII" -a "$SKIPDCM2NII" == $1 ] && echo func.nii.gz && return 0
+
+ cmd="dcmstack --include '.*' --file-ext '$DICOM_PAT'  --embed-meta -o $(basename $epi .nii.gz) --dest-dir . $mrpath"
+ [ ! -r "$epi" ] && eval $cmd && 3dNotes -h "$cmd" $epi
+
+ [ ! -r "$epi" ] && return 1
+
+ # also save out a .json file for parameters
+ jsonfile=${epi/.nii.gz/.json}
+ [ ! -r $jsonfile ] &&  nitool dump $epi > $jsonfile
+
+ # important this is not absolute path!
+ # will always be relatvei to subject folder
+ # preprocessFunctional cannot do absolute paths :)
+ echo $epi
+}
+function subj_ref {
+ wantonlyoneid $@ || return 1
+ return 1
+}
+function subj_physio {
+ wantonlyoneid $@ || return 1
+}
+
+function subj_fm {
+ wantonlyoneid $@ || return 1
+
+ # local epipath=$( _dbquery |grep $1 | cut -f 2)
+ # [ -z "$epipath" ] && echo "$1: epipath ('$epipath') DNE" >&2 && return 1
+ # local path=$(dirname $epipath)
+ # fmpatt='gre_field_mapping'
+ # # if this is rest2 seach for second fieldmap
+ # [ $_PETEPISUFFIX = rac2rest ] && fmpatt="$fmpatt-x2"
+
+ # mag=$(subj_mr_pat $path "${fmpatt}_*" $FMNMAG)
+ # [ -z "$mag" ] && return 1
+ # phase=$(subj_mr_pat $path "${fmpatt}_*" $FMNPHS)
+ # [ -z "$phase" ] && return 1
+ # echo "$mag $phase"
+
+ _dbquery |grep $1 | cut -f3,4
+}
+

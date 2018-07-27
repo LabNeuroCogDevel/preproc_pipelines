@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+SOURCE_DESC80="Cog Emo Sounds bold (Orma)"
+
+SUBJECTS_DIR="/Volumes/Zeus/MMY1_EmoSnd/FS"
+DICOM_PAT="MR*"
+
+FUNCTR="2"
+FUNCSLICEACQ="seqasc"
+
+FM_CFG="cogemox-"
+
+# where is raw data, this is actually a bids directory!
+MRROOT="/Volumes/Zeus/MMY1_EmoSnd/raw/"
+
+
+####
+function list_all {
+ ls $MRROOT|sed 's/.*sub-//p'
+}
+
+# for MHT1_2mm , subj_t1 can be dicomdir or nifti file
+function subj_t1 {
+ wantonlyoneid $@ || return 1
+ t1wnii=$MRROOT/sub-$1/anat/sub-${1}_T1w.nii.gz
+ file_exists_test "$t1wnii" >/dev/null || return 1
+ [ ! -L mprage.nii.gz ] && ln -s $t1wnii mprage.nii.gz
+ echo mprage.nii.gz
+}
+
+# segemention mask from freesurfer
+function subj_FS_aseg {
+ wantonlyoneid $@ || return 1
+ file_exists_test "$SUBJECTS_DIR/$1/mri/aseg.mgz"
+}
+
+# important this is not absolute path!
+# will always be relatvei to subject folder
+# preprocessFunctional cannot do absolute paths :)
+# have many, not using subj_t2
+function subj_t2 {
+ wantonlyoneid $@ || return 1
+ return 1
+}
+
+subj_t2s() {
+ wantonlyoneid $@ || return 1
+ local c=0
+ for runnum in 1 2 3 4; do
+  boldnii=$MRROOT/sub-$1/func/sub-${1}_task-emosnd_run$runnum.nii.gz
+  if [ -r "$boldnii" ]; then
+     echo "$boldnii run$runnum" 
+     let ++c
+  else
+    warn "$FUNCNAME: $1: cannot find $boldnii"
+  fi
+ done
+ [ $c -eq 0 ] && warn "no t2s for $1" && return 1
+}
+
+function subj_ref {
+ wantonlyoneid $@ || return 1
+ return 1
+}
+function subj_physio {
+ wantonlyoneid $@ || return 1
+ return 1
+}
+
+function subj_fm {
+ wantonlyoneid $@ || return 1
+ phase=$MRROOT/sub-$1/fmap/phase
+ mag=$MRROOT/sub-$1/fmap/mag
+ [ ! -d "$phase" -o ! -d "$mag" ] && warn "do not have both '$phase' or '$mag'" && return 1
+ echo "$mag $phase"
+ return 0
+}
+

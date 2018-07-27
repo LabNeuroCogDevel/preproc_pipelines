@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+SOURCE_DESC80="Cog Emo Sounds bold Rest (Orma)"
+SUBJECTS_DIR="/Volumes/Zeus/MMY1_EmoSnd/FS"
+DICOM_PAT="MR*"
+
+FUNCTR="2"
+FUNCSLICEACQ="seqasc"
+
+FM_CFG="cogemox-"
+
+# where is raw data, this is actually a bids directory!
+MRROOT="/Volumes/Zeus/MMY1_EmoSnd/raw/"
+
+
+####
+function list_all {
+ ls $MRROOT|sed 's/.*sub-//p'
+}
+
+# for MHT1_2mm , subj_t1 can be dicomdir or nifti file
+function subj_t1 {
+ wantonlyoneid $@ || return 1
+ t1wnii=$MRROOT/sub-$1/anat/sub-${1}_T1w.nii.gz
+ file_exists_test "$t1wnii" >/dev/null || return 1
+ [ ! -L mprage.nii.gz ] && ln -s $t1wnii mprage.nii.gz
+ echo mprage.nii.gz
+}
+
+# segemention mask from freesurfer
+function subj_FS_aseg {
+ wantonlyoneid $@ || return 1
+ file_exists_test "$SUBJECTS_DIR/$1/mri/aseg.mgz"
+}
+
+# important this is not absolute path!
+# will always be relatvei to subject folder
+# preprocessFunctional cannot do absolute paths :)
+subj_t2() {
+ wantonlyoneid $@ || return 1
+ boldnii=$MRROOT/sub-$1/func/sub-${1}_task-sacloc_run1.nii.gz
+ [ ! -r $boldnii ] && return 1
+ echo $boldnii
+ return 0
+}
+
+# probably not used
+subj_t2s() {
+ wantonlyoneid $@ || return 1
+ subj_t2 $1
+}
+
+function subj_ref {
+ wantonlyoneid $@ || return 1
+ return 1
+}
+function subj_physio {
+ wantonlyoneid $@ || return 1
+ return 1
+}
+
+function subj_fm {
+ wantonlyoneid $@ || return 1
+ phase=$MRROOT/sub-$1/fmap/phase
+ mag=$MRROOT/sub-$1/fmap/mag
+ [ ! -d "$phase" -o ! -d "$mag" ] && warn "do not have both '$phase' or '$mag'" && return 1
+ echo "$mag $phase"
+ return 0
+}
+
