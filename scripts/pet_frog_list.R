@@ -55,7 +55,7 @@ all_dirs <-
  all_dirs %>% filter(!(lunaid=="11414_20151107" & func_num=="1_seq10"))
 
 # print out
-write.table(all_dirs, row.names=F, quote=F)
+write.table(all_dirs, row.names=F, quote=F,sep="\t")
 
 # check (231 on 20180727)
 # all_dirs %>% group_by(lunaid) %>% tally %>% filter(n==6) %>% nrow

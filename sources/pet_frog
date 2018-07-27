@@ -13,7 +13,7 @@ TIMING1D=$SLICESETTINGSFILE
 #	  5) fm_func.fmmag
 #	  6) fm_func.fmphase
 _dbquery() {
-   Rscript $(cd $(dirname ${BASH_SOURCE[0]});pwd)/../scripts/pet_frog_list.R
+   Rscript $(cd $(dirname ${BASH_SOURCE[0]});pwd)/../scripts/pet_frog_list.R | sed 1d # no header
 #  sqlite3 -separator $'\t' /Volumes/Zeus/mr_sqlite/db "
 # with
 #  sbref as (
