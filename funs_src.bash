@@ -350,3 +350,32 @@ ld8_to_bids(){
  echo $dir
 
 }
+# 20180504
+FF_to_bids(){
+ [ -z "$BIDSROOT" ] && warn "BIDSROOT is not defined!" && return 1
+ wantonlyoneid $@ || return 1
+ id="$1"
+ vdate=1
+ dir=$BIDSROOT/sub-$id/$vdate
+ [ -z "$dir" ] && warn "subj bids dir '$dir' DNE!" && return 1
+ echo $dir
+}
+
+# fix 2mm mni when using bad template
+fixto1809c() { 
+  [ -n "$2" ] && echo "too many inputs to warp! $@" && return 1
+  local input=$1
+  [ -z "$input" -o ! -r "$input" ] && echo "$FUNCNAME needs nifti to warp. given '$@'" >&2 && return 1
+  dim=$(3dinfo -adj $input|sed 's/0\+$//;s/\.$//')
+  [ $dim != "1" ] && dim=_${dim}mm
+
+  local ref=/opt/ni_tools/standard_new/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c${dim}.nii 
+  # /opt/ni_tools/standard/09cFix/gen_mats.bash
+  local mat=/opt/ni_tools/standard/09cFix/2mm_luna_to_fixed.mat 
+  [ ! -r $ref -o ! -r $mat ] && echo "$FUNCNAME cannot find ref or mat ($ref $mat)" >&2 && return 1
+  output="${input/.nii.gz/.18_09c.nii.gz}" #output="$(dirname $input)/$(basename "$input" .nii.gz).18_09c.nii.gz"
+  [ -z "$REDOWARP" -a -r "$output" ] && echo "have $output" >&2 && return 0
+  echo "createing $output ($dim)"
+  cmd="applyxfm4D '$input'  $ref '$output'  $mat -singlematrix"
+  eval "$cmd" && 3dNotes -h "$cmd" "$output"
+}
