@@ -6,6 +6,7 @@ trap 'e=$?; [ $e -ne 0 ] && echo "$0 exited in error"' EXIT
 # regress nuis. without bandpassing for PNC and Reward_Rest
 # for MJ 20180322
 # WF20180403 -- change path to Finn for PNC to get missing 34
+# WF20180906 -- use only reward, change path to preproc output
 
 ## two datasources to extend
 #  Reward: /Volumes/Phillips/Finn/Reward_Rest/subjs/
