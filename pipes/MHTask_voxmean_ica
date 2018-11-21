@@ -1,13 +1,13 @@
 #!/usr/bin/bash
-PIPE_FOR="BTC"
-PIPE_DESC80="Initiall for pet rest"
+PIPE_FOR="BTCA"
+PIPE_DESC80="Initially for MMY1 EmoSnd"
 PIPE_DESC="
-Generic task pipeline with Distortion Correction (FM)
-TEMPLATE_RES default to 2.3
-includes ICA aroma
+Generic task pipeline
+TODO: fd and dvars cutoff
+3mm template (specify in config!?)
 "
-PIPE_DEPENDS=("MHT1_2mm" "ppDistortion")
-PIPE_VERSION="20171226"
+PIPE_DEPENDS=("MHT1_2mm" )
+PIPE_VERSION="20171005"
 FINALOUT=( "alltasks_preproc_complete" )
 
 function check_complete {
@@ -21,9 +21,6 @@ function run_pipeline {
  [ -z "$id" ] && warn "$FUNCNAME: no id given" && return 1
  #[ -z "$FM_CFG" ] && warn "$FUNCNAME: no FM_CFG in env!" && return 1
 
- distortion_dir=$(cd ../ppDistortion/$id/unwarp; pwd)
- [ -z "$distortion_dir" -o "$distortion_dir" == $(pwd) ] && warn "$id: no distortion dir" && return 1
-
  [ ! -d "$id" ] && mkdir $id
  cd $id
 
@@ -36,13 +33,9 @@ function run_pipeline {
    [ -z "${!v}" ] && warn "# cannot find $v for $id" && return 1
  done
 
- # which funcation to use for finding epi
- findepi=subj_t2s
- [ -z "$(type -f subj_t2s 2>/dev/null)" ] && findepi=subj_t2 
-
  # create nii.gz from analize fmt (img hdr)
  # find inputs
- nt2=$($findepi $id |wc -l)
+ nt2=$(subj_t2s $id |wc -l)
  [  "$nt2" -eq 0 ] && warn "# $id: cannot find any t2s ($(pwd))" && return 1
 
  maindir=$(pwd)
@@ -50,16 +43,23 @@ function run_pipeline {
 
  local cnt=0
 
- [ -z "$TEMPLATE_RES" ] && TEMPLATE_RES=MNI_2.3mm && SMOOTH_KERNEL=4
- [ -z "$SMOOTH_KERNEL" ] && SMOOTH_KERNEL=5
- [ -n "$SLICESETTINGSFILE" ] && SLICEOPTIONS="-custom_slice_times $SLICESETTINGSFILE"
- #SLICESETTINGSFILE=/Volumes/Phillips/mMR_PETDA/scripts/sliceTimings.1D 
-
  # for each t2 (using 'subjs_ts $id | while read' makes cnt inaccessible)
  while read t2nii name; do
-    [ -z "$t2nii" -o ! -r "$t2nii" ] && warn "# $id: provided t2 ('$t2nii') does not exist (task '$name')" && continue 
+    [ -z "$t2nii" ] && warn "# $id: not given a t2 " && continue 
+
     rundir=$maindir/$name
     [ ! -d "$rundir" ] && mkdir "$rundir"
+
+    # given a directory, make a nifti and reset t2nii
+    if [ -d "$t2nii" ]; then
+         _t2nii="$rundir/$name.nii.gz"
+         if [ !  -r "$_t2nii" ]; then
+            warn "# $id: given a directory trying to make $name.nii.gz"
+            dcm2niix_afni -o $rundir -f $name $t2nii || : # dcm2niix_afni always return error?
+         fi
+         t2nii="$_t2nii"
+    fi
+    [ ! -r "$t2nii" ] && warn "# $id: provided t2 ('$t2nii') does not exist (task '$name')" && continue 
     [ ! -e "$rundir/func.nii.gz" ] && ln -s "$t2nii" "$rundir/func.nii.gz"
     cd "$rundir"
     if [ -r .preprocessfunctional_complete ]; then 
@@ -70,34 +70,32 @@ function run_pipeline {
     fi
 
     #-func_refimg functional_ref.nii.gz \
+    #-fm_cfg $FM_CFG \
+    #-fm_phase "$phase"  -fm_magnitude "$mag" \
     #-nuisance_regression 6motion,d6motion,csf,dcsf,wm,dwm \
     #-custom_slice_times /Volumes/Phillips/mMR_PETDA/scripts/sliceTimings.1D \
-    # -hp_filter 40
+    #-smoothing_kernel 5 \
     yes | preprocessFunctional \
        -tr $FUNCTR -slice_acquisition $FUNCSLICEACQ \
        -4d func.nii.gz \
-       -smoothing_kernel $SMOOTH_KERNEL \
        -mprage_bet $bet -warpcoef $warp \
        -wavelet_despike  \
        -wavelet_threshold 10 \
+       -smoothing_kernel 5 \
        -4d_slice_motion  \
-       -distortion_dir "$distortion_dir" \
-       -bandpass_filter 0.009 .08  \
-       -rescaling_method 10000_globalmedian \
-       -template_brain "$TEMPLATE_RES" \
+       -rescaling_method 100_voxelmean  \
+       -template_brain MNI_3mm  \
        -func_struc_dof bbr  \
        -warp_interpolation spline  \
        -constrain_to_template y  \
-       -motion_censor fd=0.5,dvars=5  \
-       -ica_aroma \
-       $SLICEOPTIONS \
-       $USEOLDPPOPT \
+       -motion_censor fd=0.9,dvars=21  \
        -nuisance_file nuisance_regressors.txt \
-       -nuisance_regression 6motion,d6motion,csf,dcsf,wm,dwm  || echo "$(pwd): preprocessFunctional returned error!"
+       -nuisance_compute 6motion,d6motion,csf,dcsf,wm,dwm  \
+       -ica_aroma || continue
 
    # success, so increment count
    [ -r .preprocessfunctional_complete ] && let ++cnt
- done < <( $findepi $id 2>/dev/null )
+ done < <( subj_t2s $id 2>/dev/null )
 
  # track when finished
  warn "have cnt=$cnt"

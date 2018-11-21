@@ -3,6 +3,7 @@ SOURCE_DESC80="mMR DA PET first rest in session 1 (rac tracer)"
 
 _PETEPISUFFIX=racrest1
 SLICESETTINGSFILE=/Volumes/Phillips/mMR_PETDA/scripts/sliceTimings.1D 
+USEOLDPPOPT=-use_old_mni
 
 # look up e*rest* directories from pet study in the mr protocol database
 # select the last rest with more than 200 dicoms for ids that have a B in them (only rac+dtbz people)
@@ -108,19 +109,31 @@ function list_all {
 function subj_t1 {
  wantonlyoneid $@ || return 1
  #file_exists_test "$SUBJECTS_DIR/$1/mri/T1.mgz"
- subj_MRT1 $1
+ subj_MRT1 "$1"
 }
 
 # Want G2 but in year 2 we dont have, so will settle for G1
 function subj_MRT1 {
  wantonlyoneid $@ || return 1
- mrpath=$(_epimrpath $1)
+ mrpath=$(_epimrpath "$1")
 
  # we have two 
  # pick this over 34 over 11616_20170807/Sagittal_MPRAGE_ADNI_G2_256x240.25
  if [[ "$1" = 11616_20170807 ]]; then
   echo /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2017.08.07-14.17.11/11616_20170807/Sagittal_MPRAGE_ADNI_G2_256x240.34
   return 0
+ elif [[ "$1" = 11443_20151022 ]]; then
+  echo /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2015.10.22-10.52.52/B0078/Sagittal_MPRAGE_ADNI_256x240.25/
+  return 0
+ elif [[ "$1" = 11429_20150918 ]]; then
+  echo /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2015.09.18-08.35.03/B0070/Head_Sagittal_MPRAGE_ADNI_G2_256x240.10/
+  return 0
+ elif [[ "$1" = 11434_20160601 ]]; then
+  echo /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2016.06.01-11.05.56/B0149/Sagittal_MPRAGE_ADNI_G2_fov320_320x300.10
+  return 0
+ #elif [[ "$1" = 11434_20160601 ]]; then
+ # echo /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2016.06.01-08.50.21/B0149/Sagittal_MPRAGE_ADNI_G2_256x240.10/
+ # return 0
  fi
 
  subj_mr_pat "$(cd $mrpath/..;pwd)"  'Sagittal_MPRAGE_ADNI_G2_256x240*' 176 ||
