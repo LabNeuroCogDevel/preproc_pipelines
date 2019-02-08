@@ -45,9 +45,21 @@ function run_pipeline {
 
  # for each t2 (using 'subjs_ts $id | while read' makes cnt inaccessible)
  while read t2nii name; do
-    [ -z "$t2nii" -o ! -r "$t2nii" ] && warn "# $id: provided t2 ('$t2nii') does not exist (task '$name')" && continue 
+    [ -z "$t2nii" ] && warn "# $id: not given a t2 " && continue 
+
     rundir=$maindir/$name
     [ ! -d "$rundir" ] && mkdir "$rundir"
+
+    # given a directory, make a nifti and reset t2nii
+    if [ -d "$t2nii" ]; then
+         _t2nii="$rundir/$name.nii.gz"
+         if [ !  -r "$_t2nii" ]; then
+            warn "# $id: given a directory trying to make $name.nii.gz"
+            dcm2niix_afni -o $rundir -f $name $t2nii || : # dcm2niix_afni always return error?
+         fi
+         t2nii="$_t2nii"
+    fi
+    [ ! -r "$t2nii" ] && warn "# $id: provided t2 ('$t2nii') does not exist (task '$name')" && continue 
     [ ! -e "$rundir/func.nii.gz" ] && ln -s "$t2nii" "$rundir/func.nii.gz"
     cd "$rundir"
     if [ -r .preprocessfunctional_complete ]; then 

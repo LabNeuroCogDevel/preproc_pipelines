@@ -13,9 +13,9 @@ trap 'e=$?; [ $e -ne 0 ] && echo "$0 exited in error"' EXIT
 
 reward_loc="/Volumes/Phillips/Finn/Reward_Rest/subjs/*/preproc/brnaswdktm/" 
 #pnc_loc="/Volumes/Zeus/preproc/PNC_rest/MHRest_ICAaroma/*/"
-pnc_loc="/Volumes/Zeus/preproc/PNC_rest/MHRest/*/preproc/brnaswdktm/"
+pnc_loc="/Volumes/Zeus/preproc/PNC_rest/aroma/*/preproc/"
 
-for f in {$reward_loc,$pnc_loc}/naswdktm_restepi_5.nii.gz; do
+for f in {$pnc_loc,$reward_loc}/naswdktm_restepi_5.nii.gz; do
   cd $(dirname $f)
   pwd
 
@@ -44,4 +44,5 @@ for f in {$reward_loc,$pnc_loc}/naswdktm_restepi_5.nii.gz; do
       -ort nuisance_regressors.txt \
       -dt $dt \
       -prefix "$reg_outfname" 
+  break
 done

@@ -14,18 +14,25 @@ trap 'e=$?; [ $e -ne 0 ] && echo "$0 exited in error"' EXIT
 
 # reg file like: /Volumes/Zeus/preproc/reward_rest/MHRest_aroma/10629_20120317/rest/nuisance_regressors_withgs.txt
 reward_loc="/Volumes/Zeus/preproc/reward_rest/MHRest_aroma/*/rest/"
+pnc_loc="/Volumes/Zeus/preproc/PNC_rest/aroma/*/preproc/"
+# creates 
+#  /Volumes/Zeus/preproc/reward_rest/MHRest_aroma/*/rest/grnaswdktm_tproject_20180906.nii.gz
+#  /Volumes/Zeus/preproc/PNC_rest/aroma/*/preproc/grnaswdktm_tproject_20180906.nii.gz
 
-for f in {$reward_loc,$pnc_loc}/naswdktm_restepi_5.nii.gz; do
+
+for f in {$pnc_loc,$reward_loc}/naswdktm_restepi_5.nii.gz; do
   cd $(dirname $f)
   pwd
 
   # skip if already have
   reg_outfname="grnaswdktm_tproject_20180906.nii.gz"
+  regfile=nuisance_regressors_withgs.txt 
   [ -r "$reg_outfname" ] && continue
 
   [ ! -r wktm_restepi_98_2_mask_dil1x_templateTrim.nii.gz ] && \
      echo "$(pwd): no mask" && continue
-  [ ! -r nuisance_regressors_withgs.txt ] && \
+  [ ! -r $regfile ] && regfile=nuisance_regressors_withgsr.txt
+  [ ! -r $regfile ] && \
      echo "$(pwd): no reg file" && continue
   
   # set tr: PNC=3; reward=1.5
@@ -41,7 +48,7 @@ for f in {$reward_loc,$pnc_loc}/naswdktm_restepi_5.nii.gz; do
   3dTproject -overwrite \
       -input "naswdktm_restepi_5.nii.gz" \
       -mask "wktm_restepi_98_2_mask_dil1x_templateTrim.nii.gz" \
-      -ort nuisance_regressors_withgs.txt \
+      -ort $regfile \
       -dt $dt \
       -prefix "$reg_outfname" 
 done

@@ -377,5 +377,6 @@ fixto1809c() {
   [ -z "$REDOWARP" -a -r "$output" ] && echo "have $output" >&2 && return 0
   echo "createing $output ($dim)"
   cmd="applyxfm4D '$input'  $ref '$output'  $mat -singlematrix"
+  echo "$cmd # $(pwd)"
   eval "$cmd" && 3dNotes -h "$cmd" "$output"
 }
