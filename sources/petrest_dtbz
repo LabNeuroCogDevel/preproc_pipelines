@@ -122,7 +122,7 @@ best_match_no as (
 select ld8,dir as restdir,fmmag,fmphase,diff,ndsi, nfuncs, cohort 
   from fm_rest 
   join best_match_no on closestdiff=diff and fm_rest.sessionname = best_match_no.sessionname
-";
+"
 
 #ls -d /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2016.09.30-11.10.05/*/*{rest,field,MPRAGE}*
 # echo "11576_20160930 /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2016.09.30-11.10.05/B0160/ep2d_BOLD_resting_320meas_672x672.7 /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2016.09.30-11.10.05/B0160/gre_field_mapping_96x96.8 /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2016.09.30-11.10.05/B0160/gre_field_mapping_96x96.9 0 0 adult

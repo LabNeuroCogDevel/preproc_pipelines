@@ -95,7 +95,7 @@ FMNPHS=45
 
 _epimrpath() {
    # 20170719 - remove when duplicate becaue path has e.g. a/b and a//b
- mrpath=$(_dbquery | grep $1 |  cut -f2| sed 's:/\+:/:g' | uniq )
+ mrpath=$(_dbquery | grep $1 |grep -v /moved/ |  cut -f2| sed 's:/\+:/:g' | grep -v 11515_20172018 | uniq )
  [ -z "$mrpath" -o ! -r "$mrpath" ] && echo -e "$1 has bad entry in db:\n$mrpath\n" >&2 && return 1
  echo $mrpath
 }
@@ -115,7 +115,6 @@ function subj_t1 {
 # Want G2 but in year 2 we dont have, so will settle for G1
 function subj_MRT1 {
  wantonlyoneid $@ || return 1
- mrpath=$(_epimrpath "$1")
 
  # we have two 
  # pick this over 34 over 11616_20170807/Sagittal_MPRAGE_ADNI_G2_256x240.25
@@ -131,11 +130,21 @@ function subj_MRT1 {
  elif [[ "$1" = 11434_20160601 ]]; then
   echo /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2016.06.01-11.05.56/B0149/Sagittal_MPRAGE_ADNI_G2_fov320_320x300.10
   return 0
+ elif [[ "$1" == 11579_20180323 ]]; then
+    echo /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2018.03.23-13.16.29/11579_20180323/Sagittal_MPRAGE_ADNI_G2_256x240.41/
+    return 0
+ elif [[ "$1" == 11429_20150918 ]]; then
+    echo /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2015.09.18-08.35.03/B0070/Head_Sagittal_MPRAGE_ADNI_G2_256x240.10
+    return 0
+ elif [[ "$1" == 11515_20171018 ]]; then
+    echo /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2017.10.18-15.50.46/11515_20171018/Sagittal_MPRAGE_ADNI_G2_256x240.27
+    return 0
  #elif [[ "$1" = 11434_20160601 ]]; then
  # echo /Volumes/Phillips/Raw/MRprojects/mMRDA-dev/2016.06.01-08.50.21/B0149/Sagittal_MPRAGE_ADNI_G2_256x240.10/
  # return 0
  fi
 
+ mrpath=$(_epimrpath "$1")
  subj_mr_pat "$(cd $mrpath/..;pwd)"  'Sagittal_MPRAGE_ADNI_G2_256x240*' 176 ||
   subj_mr_pat "$(cd $mrpath/..;pwd)"  'Sagittal_MPRAGE_ADNI_G2_256x256*' 176 || # 11459_20160121
   subj_mr_pat "$(cd $mrpath/..;pwd)"  'Sagittal_MPRAGE_ADNI_256x240*' 160 || return 1
