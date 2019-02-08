@@ -110,7 +110,10 @@ function run_pipeline {
     ## finish the rest
     # -func_struc_dof bbr -> 6 # --- NO BBR ---
     export MATLAB_RAM_limit=6 # def is 3, effects chunk size but not exec time?
+    use_old=""
+    [[ $(pwd) =~ petrest ]] && use_old=-use_old_mni && echo "USING OLD MNI!"
     yes | preprocessFunctional \
+       $use_old \
        -tr $FUNCTR -slice_acquisition $FUNCSLICEACQ \
        -4d func.nii.gz \
        -func_struc_dof 6 \

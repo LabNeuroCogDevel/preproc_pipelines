@@ -91,7 +91,9 @@ function run_pipeline {
     #-nuisance_regression 6motion,d6motion,csf,dcsf,wm,dwm \
     #-custom_slice_times /Volumes/Phillips/mMR_PETDA/scripts/sliceTimings.1D \
     # -hp_filter 40
+    [[ $(pwd) =~ petrest ]] && use_old=-use_old_mni && echo "USING OLD MNI!"
     yes | preprocessFunctional \
+       $use_old \
        -tr $FUNCTR -slice_acquisition $FUNCSLICEACQ \
        -4d func.nii.gz \
        -func_struc_dof 6 \
