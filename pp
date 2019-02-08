@@ -44,27 +44,32 @@ scriptdir=$(cd $(dirname $0);pwd)
 source $scriptdir/funs_src.bash
 
 [ "$1" = "-h" ] && help && list_pipeandsource && exit 0
-[ -z "$2" ] && usage "need better arguemnts, try $(list_pipeandsource)"
-datasource=$1; pipeline=$2
+[ -z "$1" ] && usage "need better arguemnts, try $(list_pipeandsource)"
+
+datasource="$1"; pipeline="$2";
 
 # we can specify datasource and pipeline as files
 # but if we didn't, check inisde a subdirectory
 [ ! -r $datasource    ] && datasource="$scriptdir/sources/$1"
-[ ! -r $pipeline ] && pipeline="$scriptdir/pipes/$2"
-
 # before we go on, make sure we have a datasource and pipeline file
 [ ! -r "$datasource"    ] && usage "cannot read datasource ($1) file '$datasource'"
-[ ! -r "$pipeline" ] && usage "cannot read pipeline ($2) file '$pipeline'"
+source $datasource || err "could not source $datasource'"
 
+# list all subjects if not given a pipeline, still exit with error
+if [ -z "$pipeline" ]; then 
+   list_all
+   exit 0
+fi
+
+[ ! -r "$pipeline" ] && pipeline="$scriptdir/pipes/$2"
+[ ! -r "$pipeline" ] && usage "cannot read pipeline ($2) file '$pipeline'" 
 # get the goodies inside each file
-source $datasource || err "could not source $datasource"
 source $pipeline   || err "could not source $pipeline"
 
 ## we want to take the arguements as ids
 ## or use the list_all function from datasource
-
-# get datasource and pipeline off the arg list
 shift; shift;
+
 
 # set the exit trap so we when we die 
 trap trapmsg EXIT
@@ -126,7 +131,7 @@ function runwithdepends {
  fi
  
  # group can write for all pipelines
- [ -d "$id" ] && chmod -R g+w "$id"
+ [ -d "$PPSUBJSDIR/$id" ] && chmod -R g+w "$PPSUBJSDIR/$id"
 
  wait
 
@@ -139,6 +144,7 @@ function runwithdepends {
 PPSUBJSDIR="/Volumes/Zeus/preproc/$(basename $datasource)/$(basename $pipeline)"
 [ ! -d "$PPSUBJSDIR" ] && mkdir -p $PPSUBJSDIR
 
+PIDS=()
 
 # warp it all together
 args_or_list_all_ids $@ | while read id; do
@@ -163,18 +169,21 @@ args_or_list_all_ids $@ | while read id; do
  #fork: run a whole bunch at the same time
  else
    runwithdepends $id &
+   PIDS=(${PIDS[@]} $!)
    echo "# launched $datasource::$pipeline for $id ($(njobs)/$MAXJOBS jobs)"
  fi
 
  
  # wait a second for jobs to report they've already finished
- sleep 1
+ sleep 0.5
  waitforjobs $MAXJOBS
 done
 
 #echo "# all jobs forked, waiting to complete"
-wait
+echo "Done launching jobs. waiting for all to fininish ($(njobs) jobs w/PIDS $PIDS)"
+#pstree -sp $$
+waitforjobs 1
 # any jobs forked by children are not catpured here
 #[ $# -gt 1 -o $MAXJOBS -gt 1 ] && ps
 
-echo "finished!"
+echo "finished! have $(njobs) jobs w/PIDS: $PIDS"
