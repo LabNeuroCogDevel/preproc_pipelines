@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+scriptdir=$(cd $(dirname $0); pwd)
+preproc_dir=/Volumes/Zeus/preproc
+SUBJ_LEVEL=7 # 1/2:vol/3:zeus/4:preproc/5:$src/6:$pipe/7:$subj
+src=""
+if [ $# -ge 1 ] && [ -d "$1" ]; then
+   # eg. /Volumes/Zeus/preproc/petrest_rac1/MHRest_FM_ica
+   read src pipe <<< $(echo "$1" | sed "s:^$preproc_dir/::" |tr / ' ')
+   shift
+elif [ $# -ge 2 ]; then
+   src="$1"; shift
+   pipe="$1"; shift
+fi
+
+if [ -z "$src" ]; then
+   cat <<HERE
+USAGE:
+  $0 /Volumes/Zeus/preproc/source/pipeline [diff]
+  $0 source pipeline [diff]
+HERE
+ exit 1
+fi
+
+[ $# -eq 1 ] && [ "$1" == "diff" ] && diff=1 || diff=0
+
+
+pipe_file="$scriptdir/pipes/$pipe"
+[ ! -s "$pipe_file" ] && echo "no pipeline $pipe ($pipe_file DNE)" >&2 && exit 1
+source $pipe_file
+
+data_dir=$preproc_dir/$src/$pipe 
+[ ! -r $data_dir ] && echo "$data_dir does not exist yet" >&2 && exit 1
+
+list_all() { pp $src|sort|uniq; }
+list_started(){ ls -d $data_dir/*/ |grep -v bad|sort|uniq; }
+list_finished(){ find $data_dir/ -iname ${FINALOUT[0]} |sort|uniq; }
+subj_from_dir() { cut -d/ -f $SUBJ_LEVEL; }
+diff_subjs(){ diff <(list_all) <($1 | subj_from_dir) | sed -n 's/^< /\t/p' || :; }
+known_cnt=$(list_all |wc -l)
+started_cnt=$(list_started | wc -l)
+finished_cnt=$(list_finished |wc -l)
+
+echo pipe  src   known     started   finished
+echo $pipe $src $known_cnt $started_cnt $finished_cnt
+
+if [ $diff -gt 0 ]; then
+   echo "DNE unfinished"
+   diff -y <(diff_subjs list_started) <(diff_subjs list_finished) | sed 's/ \+/ /g' | column -t || :
+fi
