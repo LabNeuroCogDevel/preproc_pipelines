@@ -145,10 +145,15 @@ function subj_fm {
  
 
  [ ${#path[@]} -gt 1 ] && warn "$FUNCNAMME: $1 has too many possible paths (${#path[@]}): ${path[@]}" && return 1
+
+ NMAG=120
+ NPHASE=60
+ # for DM 20180712 -- allow these two to pass with there sub par fieldmaps (are they the correct direction!?)
+ [ "$1" == 10637_20140304 -o "$1" == 11178_20140310 ] && NMAG=66 && NPHASE=33 && export FM_CFG=multimodal
  
- mag=$(subj_mr_pat $path 'gre_field_*' 120)
+ mag=$(subj_mr_pat $path 'gre_field_*' $NMAG)
  [ -z "$mag" ] && return 1
- phase=$(subj_mr_pat $path 'gre_field_*' 60)
+ phase=$(subj_mr_pat $path 'gre_field_*' $NPHASE)
  [ -z "$phase" ] && return 1
  echo "$mag $phase"
 }

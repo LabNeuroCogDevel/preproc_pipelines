@@ -27,6 +27,8 @@ function run_pipeline {
  # find the t1dir with MRs in it
  read mrmag mrphase < <(subj_fm $id)
  [ -z "$mrmag" -o -z "$mrphase" ] && warn "could not find fm mag and phase for $id: source pipeline and source; 'subj_fm $id'" && return 1
+ [ ! -d "$mrmag" ] && warn "bad mrphase dir $mrmag" && return 1
+ [ ! -d "$mrphase" ] && warn "bad mrphase dir $mrphase" && return 1
 
  preprocessDistortion -phasedir $mrphase -magdir $mrmag -fm_cfg $FM_CFG
 

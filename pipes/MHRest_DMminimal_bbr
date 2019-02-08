@@ -4,10 +4,14 @@ PIPE_DESC80="Minimal for pet rest"
 PIPE_DESC="
 Generic minimal pipeline with Distortion Correction (FM)
 TEMPLATE_RES default to 2.3
-includes ICA aroma
 "
-PIPE_DEPENDS=("MHT1_2mm" "ppDistortion" )
-PIPE_VERSION="20180205"
+PIPE_DEPENDS=("MHT1_2mm" )
+[ -z "$NO_FM" ] && PIPE_DEPENDS=("MHT1_2mm" "ppDistortion" )
+
+PIPE_VERSION="20180505" # initial
+PIPE_VERSION="20180514" # allow no ppDistortion
+PIPE_VERSION="20180711" # handle ref and hdr files
+
 FINALOUT=( "alltasks_preproc_complete" )
 
 function check_complete {
@@ -21,11 +25,15 @@ function run_pipeline {
  [ -z "$id" ] && warn "$FUNCNAME: no id given" && return 1
  #[ -z "$FM_CFG" ] && warn "$FUNCNAME: no FM_CFG in env!" && return 1
 
- # 
- distortion_dir=$(cd ../ppDistortion/$id/unwarp; pwd)
- [ -z "$distortion_dir" -o "$distortion_dir" == $(pwd) ] && warn "$id: no distortion dir" && return 1
+ DISTORTION_OPTS=""
+ if [ -z "$NO_FM" ]; then
+   distortion_dir=$(cd ../ppDistortion/$id/unwarp; pwd)
+   [ -z "$distortion_dir" -o "$distortion_dir" == $(pwd) ] && 
+     warn "$id: no distortion dir" && return 1
+   DISTORTION_OPTS="-distortion_dir $distortion_dir "
+ fi
 
- # previous mt
+ # previous mt (motion+slicetiming)
  pipelinedir=$(pwd)
  prevMT=$(find $pipelinedir/../*/$id/ -iname 'tm_func.nii.gz' -type f| grep -v '\.\./MHRest_DMminimal/' |  sed 1q)
 
@@ -43,12 +51,12 @@ function run_pipeline {
 
  # which funcation to use for finding epi
  findepi=subj_t2s
- [ -z "$(type -f subj_t2s 2>/dev/null)" ] && findepi=subj_t2 
+ [ -z "$(type subj_t2s 2>/dev/null)" ] && findepi=subj_t2 
 
  # create nii.gz from analize fmt (img hdr)
  # find inputs
  nt2=$($findepi $id |wc -l)
- [  "$nt2" -eq 0 ] && warn "# $id: cannot find any t2s ($(pwd))" && return 1
+ [  "$nt2" -eq 0 ] && warn "# $id: cannot find any t2s (in $(pwd) with '$findepi')" && return 1
 
  maindir=$(pwd)
 
@@ -77,7 +85,18 @@ function run_pipeline {
     [ -z "$t2nii" -o ! -r "$t2nii" ] && warn "# $id: provided t2 ('$t2nii') does not exist (task '$name')" && continue 
     rundir=$maindir/$name
     [ ! -d "$rundir" ] && mkdir "$rundir"
-    [ ! -e "$rundir/func.nii.gz" ] && ln -s "$t2nii" "$rundir/func.nii.gz"
+    if [ ! -e "$rundir/func.nii.gz" ]; then 
+       if   [[ $t2nii =~ .hdr$ ]]   ; then 3dcopy $t2nii "$rundir/func.nii.gz";
+       elif [[ $t2nii =~ .nii.gz$ ]]; then  ln -s "$t2nii" "$rundir/func.nii.gz";
+       else                           echo "dont know what to do with input file like $t2nii" && return 1;
+       fi
+    fi
+
+    # add reference volume if we have one
+    REF_OPTS=""
+    ref="$(subj_ref $id || echo "")"
+    [ -n "$ref" -a -r "$ref" -a ! -r $rundir/func_ref.nii.gz ] && 3dcopy $ref $rundir/func_ref.nii.gz && REF_OPTS=" -func_refimg func_ref.nii.gz "
+
     cd "$rundir"
     if [ -r .preprocessfunctional_complete ]; then 
       let ++cnt
@@ -93,10 +112,11 @@ function run_pipeline {
     yes | preprocessFunctional \
        -tr $FUNCTR -slice_acquisition $FUNCSLICEACQ \
        -4d func.nii.gz \
+       $REF_OPTS \
        -no_smooth \
        -mprage_bet $bet -warpcoef $warp \
        -4d_slice_motion  \
-       -distortion_dir "$distortion_dir" \
+       $DISTORTION_OPTS \
        -rescaling_method 10000_globalmedian \
        -template_brain "$TEMPLATE_RES" \
        -func_struc_dof bbr  \
