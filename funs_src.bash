@@ -369,9 +369,9 @@ fixto1809c() {
   dim=$(3dinfo -adj $input|sed 's/0\+$//;s/\.$//')
   [ $dim != "1" ] && dim=_${dim}mm
 
-  local ref=/opt/ni_tools/standard_new/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c${dim}.nii 
+  local ref=/opt/ni_tools/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c${dim}.nii 
   # /opt/ni_tools/standard/09cFix/gen_mats.bash
-  local mat=/opt/ni_tools/standard/09cFix/2mm_luna_to_fixed.mat 
+  local mat=/opt/ni_tools/standard_old/09cFix/2mm_luna_to_fixed.mat 
   [ ! -r $ref -o ! -r $mat ] && echo "$FUNCNAME cannot find ref or mat ($ref $mat)" >&2 && return 1
   output="${input/.nii.gz/.18_09c.nii.gz}" #output="$(dirname $input)/$(basename "$input" .nii.gz).18_09c.nii.gz"
   [ -z "$REDOWARP" -a -r "$output" ] && echo "have $output" >&2 && return 0
