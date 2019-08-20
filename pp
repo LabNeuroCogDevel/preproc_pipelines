@@ -13,6 +13,8 @@
 #  
 ## END USAGE
 
+[ -n "$VERBOSE" ] && set -x
+
 #####
 # get list of datasource and pipeline options
 # printted during usage message

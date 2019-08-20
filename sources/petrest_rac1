@@ -76,6 +76,9 @@ select ld8,dir as restdir,fmmag,fmphase,diff
   from fm_rest 
   join best_match_no on closestdiff=diff and fm_rest.sessionname = best_match_no.sessionname
 ";
+# ld8, restdir, fmmag, fmphase, diff
+echo -e "99998_20190103	/Volumes/Phillips/mMR_PETDA/raw/99998_20190103/2019.01.03-10.49.25/99998_20190103/ep2d_BOLD_resting_320meas_672x672.8	/Volumes/Phillips/mMR_PETDA/raw/99998_20190103/2019.01.03-10.49.25/99998_20190103/gre_field_mapping_96x96.5	/Volumes/Phillips/mMR_PETDA/raw/99998_20190103/2019.01.03-10.49.25/99998_20190103/gre_field_mapping_96x96.6	2"
+echo -e "99998_20190808	/Volumes/Phillips/mMR_PETDA/raw/99998_20190808/2019.08.08-13.14.49/20190808/Head_ep2d_BOLD_resting_WAIT-FOR-RECONSTRUCTION-FOR-EACH-SERIES_672x672.35	/Volumes/Phillips/mMR_PETDA/raw/99998_20190808/2019.08.08-13.14.49/20190808/Head_gre_field_mapping-x2_96x96.32	/Volumes/Phillips/mMR_PETDA/raw/99998_20190808/2019.08.08-13.14.49/20190808/Head_gre_field_mapping-x2_96x96.33	2"
 }
 
 SUBJECTS_DIR="/Volumes/Phillips/mMR_PETDA/FS"

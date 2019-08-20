@@ -62,7 +62,7 @@ function findpattdcmcnt  {
  # default to dicom pattern as MR* (alternative might be *.dcm)
  [ -z "$DICOM_PAT" ] && DICOM_PAT='MR*'
 
- find $root -maxdepth 1 -iname "$pat" | while read d; do
+ find -L $root -maxdepth 1 -iname "$pat" | while read d; do
    cnt=$(ls $d/$DICOM_PAT | wc -l)
    [ $cnt -ne $dicomcnt ] && warn "# $d has $cnt MR*s, not $dicomcnt" && continue
    echo $d

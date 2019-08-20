@@ -36,7 +36,7 @@ function run_pipeline {
    if [ -r $t1dir/mprage_bet.nii.gz -a -r $t1dir/mprage_warpcoef.nii.gz ]; then
       ln -s $t1dir/mprage_{bet,warpcoef}.nii.gz  ./
 
-   elif [ $(find $t1dir -maxdepth 1 -iname "$DICOM_PAT" |wc -l ) -gt 0 ]; then
+   elif [ $(find -L $t1dir -maxdepth 1 -iname "$DICOM_PAT" |wc -l ) -gt 0 ]; then
       echo "$t1dir/$DICOM_PAT" > .mprageDCMdir
       for d in $t1dir/$DICOM_PAT; do
        [ -r ./$(basename $d) ] && continue
@@ -46,7 +46,7 @@ function run_pipeline {
    fi
 
  elif [ -r "$t1dir" -a ! -d "$t1dir" ]; then
-   cp $t1dir mprage.nii.gz
+   3dcopy $t1dir mprage.nii.gz
    preprocessMprage -r MNI_2mm -n mprage.nii.gz && touch ".mprage_complete"
 
  else
