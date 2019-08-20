@@ -3,7 +3,7 @@ PIPE_FOR="FC"
 PIPE_DESC80="Initiall for 7T rest"
 PIPE_DESC="
 Generic task pipeline with Distortion Correction (FM)
-TEMPLATE_RES default to 2.3
+TEMPLATE_RES default to 2
 includes ICA aroma
 no fieldmap, no slice time correct
 "
@@ -21,6 +21,7 @@ function run_pipeline {
  id="$1"
  [ -z "$id" ] && warn "$FUNCNAME: no id given" && return 1
  #[ -z "$FM_CFG" ] && warn "$FUNCNAME: no FM_CFG in env!" && return 1
+ [ -z "$FUNCTR" ] && warn "FUNCTR is not defined!" && return 1
 
  [ ! -d "$id" ] && mkdir $id
  cd $id
@@ -48,10 +49,8 @@ function run_pipeline {
 
  local cnt=0
 
- [ -z "$TEMPLATE_RES" ] && TEMPLATE_RES=MNI_2.3mm && SMOOTH_KERNEL=4
+ [ -z "$TEMPLATE_RES" ] && TEMPLATE_RES=MNI_2mm && SMOOTH_KERNEL=4
  [ -z "$SMOOTH_KERNEL" ] && SMOOTH_KERNEL=5
- [ -n "$SLICESETTINGSFILE" ] && SLICEOPTIONS="-custom_slice_times $SLICESETTINGSFILE"
- #SLICESETTINGSFILE=/Volumes/Phillips/mMR_PETDA/scripts/sliceTimings.1D 
 
  # for each t2 (using 'subjs_ts $id | while read' makes cnt inaccessible)
  while read t2nii name; do
@@ -82,12 +81,12 @@ function run_pipeline {
        -ica_aroma \
        -bandpass_filter 0.009 .08  \
        -rescaling_method 10000_globalmedian \
-       -template_brain MNI_2mm  \
+       -template_brain $TEMPLATE_RES  \
        -func_struc_dof bbr  \
        -warp_interpolation spline  \
        -constrain_to_template y  \
        -motion_censor fd=0.3,dvars=20  \
-       -smoothing_kernel 4 \
+       -smoothing_kernel $SMOOTH_KERNEL \
        -nuisance_file nuisance_regressors.txt \
        -nuisance_compute csf,dcsf,wm,dwm \
        -nuisance_regression 6motion,d6motion,csf,dcsf,wm,dwm || echo "$(pwd): preprocessFunctional returned error!"
