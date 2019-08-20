@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+# 80 char description
+SOURCE_DESC80="reprocess MMY2 for ana"
+
+SUBJECTS_DIR="/DNE/" # no freesurfer currently
+DICOM_PAT="MR*" 
+
+FUNCTR="2"
+FUNCSLICEACQ="seqasc"
+
+MRROOT="/data/Luna1/Raw/MultiModal/"
+
+# There is no fieldmap
+FM_CFG=""
+
+# db helper
+_db(){ sqlite3 /Volumes/Zeus/mr_sqlite/db -separator $'\t' "$1"; }
+
+function list_all {
+ (_db 'select patname,dir,name from mrinfo where study like "multimodal%" and name like "Multi%WM%" and ndcm = 192' ;
+  # 10918_20130129, 10895_20130201 both have 190 instead of 192 -- why?!
+  _db 'select patname,dir,name from mrinfo where study like "multimodal%" and name like "Multi%WM%" and ndcm >= 190 and patname in ("10918_20130129", "10895_20130201")'
+  ) | cut -f1 |sort |uniq
+}
+
+
+
+function subj_t1 {
+ wantonlyoneid $@ || return 1
+ [ -r mprage.nii.gz ] && echo mprage.nii.gz && return 0
+ dcm=$(_db "select dir from mrinfo where study like 'multimodal%' and patname like '$1' and name like 'axial_mprage%' and (ndcm = 192 or ndcm= 193)")
+ dcm2niix_afni -o ./ -f mprage $dcm >&2
+ [ ! -r mprage.nii.gz ] && warn "failed create $(pwd)/mprage.nii.gz from $dcm" && return 1
+ echo $(pwd)/mprage.nii.gz
+}
+
+# return path\tname
+# see:
+# sqlite3 /Volumes/Zeus/mr_sqlite/db -separator $'\t' 'select dir,seqno,name from mrinfo where study like "multimodal%" and name like "Multi%WM%" and patname like "10997_20130329"'| sort -k2nr,3 # |uniq -f2
+function subj_t2s {
+ wantonlyoneid $@ || return 1
+ # sometimes have more than one, take the oldest
+ _db "select dir,seqno,name from mrinfo where study like 'multimodal%' and name like 'Multi%WM%' and patname like '$1'"|
+  sed 's/MultimodallWM_v1_run4$/MultimodalWM_v1_run4/' | # fix double l in modallWM
+  sort -k2nr,3 | uniq -f 2 | cut -f1,3
+ return 0
+}
+subj_t2(){
+ echo "ERROR: looking for only one subj_t2 but should use subj_t2s -- there are 4 runs!"
+ return 1
+ #subj_t2s $@
+}
+
+
+function subj_physio {
+ wantonlyoneid $@ || return 1
+ return 0
+}

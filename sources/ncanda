@@ -6,7 +6,9 @@ SUBJECTS_DIR="/DNE/" # no freesurfer currently
 DICOM_PAT="*NONE" # no dicoms, comes from dataset
 
 FUNCTR="2.2" 
-FUNCSLICEACQ="??" # no slice acq
+FUNCSLICEACQ="??" # no slice acq have both GE and seiemns (interlaved)
+TEMPLATE_RES=MNI_3mm 
+SMOOTH_KERNEL=5
 
 MRROOT="/DNE/"
 NIIROOT="/Volumes/Hera/Raw/Datasets/NCANDA/"
@@ -14,7 +16,6 @@ DBFILE="$NIIROOT/id_t1_epi.tsv"
 
 # TODO: make config for ncanda 
 FM_CFG=""
-
 _mkncandadb() {
  # have 3 visits: find all that have both t1 and rest and
  #  create session id like 'ncandaid_year' where baseline = year 0 to so 1y and 2y match raw directory names
@@ -34,9 +35,9 @@ _mkncandadb() {
     t2=$(dirname $t1)
     t2=${t2/NCANDA_*\/case/*/case}  
     t2=${t2/structural\//restingstate/}  
-    t2=$(find $t2 -name 'bold-001.nii.gz')
+    t2=$(find $t2 -name 'bold-001.nii.gz' || echo "")
     [ -n "$t2" ] && echo -e "$id\t$t1\t$t2" || :
-  done> $DBFILE
+  done |tee  $DBFILE
 }
 
 function list_all {
@@ -55,12 +56,10 @@ function subj_t1 {
 
 function subj_t2 {
  wantonlyoneid $@ || return 1
- echo "NOT IMPLEMENTED" >&2 
- return 1
  local t2=$(awk -v id="$1" '($1==id){print $3; quit}' $DBFILE)
  [ -z "$t2" ] && echo "$FUNCNAME: no id $1" >&2 && return 1
- [ ! -r func.nii.gz ] && 3dTcat -prefix func.nii.gz -tr $FUNCTR ${t2/001/*}
- [ -r func.nii.gz ] && echo func.nii.gz || return 1
+ [ ! -r functional.nii.gz ] && 3dTcat -prefix functional.nii.gz -tr $FUNCTR ${t2/-001/*}
+ [ -r functional.nii.gz ] && echo functional.nii.gz || return 1
  return 0
 }
 
