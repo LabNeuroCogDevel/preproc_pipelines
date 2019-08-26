@@ -22,9 +22,9 @@ function listdir {
   srcdir=$SCRIPTDIR/$1
   [ ! -d $srcdir ] && err "no directory '$srcdir'"
 
-  find $srcdir -type f -not -name template -not -name '*.swp'| while read f; do
-    date=$(sed -n 's/"//g;s/.*_VERSION=//p' $f)
-    desc=$(sed -n 's/"//g;s/.*DESC80=//p' $f)
+  find $srcdir -type f -not -name template -not -name '.*' -and -not -name '*.swp'| while read f; do
+    date="$(sed -n 's/"//g;s/.*_VERSION=//p' "$f")"
+    desc="$(sed -n 's/"//g;s/.*DESC80=//p' "$f")"
     echo -e "$(basename $f)\t$date\t$desc"
   done | column -ts'	'|sed 's/^/    /' |sort -k2,2nr
 }
@@ -82,6 +82,9 @@ trap trapmsg EXIT
 function args_or_list_all_ids {
   if [ -z "$1" ]; then
    list_all
+  elif [[ "$1" == "all" && $# -eq 1 ]]; then
+   local s="$(basename $datasource)"; local p="$(basename $pipeline)";
+   pp_status $s $p diff| perl -slane 'next unless $.>3; print $F[1]'
   else
    for id in $@; do echo $id; done
   fi
