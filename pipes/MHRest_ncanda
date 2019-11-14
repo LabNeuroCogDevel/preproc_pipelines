@@ -1,6 +1,7 @@
 #!/usr/bin/bash
+PIPE_VERSION="20191114" # using interleaved and ppDist
 PIPE_FOR="FC"
-PIPE_DESC80="Initiall for ncanda"
+PIPE_DESC80="Initial for ncanda"
 PIPE_DESC="
 Generic task pipeline with Distortion Correction (FM)
 TEMPLATE_RES default to 2.3
@@ -8,8 +9,7 @@ does not include ICA aroma
 no slice time correct
 premature stop after depiking
 "
-PIPE_DEPENDS=("MHT1_2mm")
-PIPE_VERSION="20190730"
+PIPE_DEPENDS=("MHT1_2mm" "ppDistortion")
 FINALOUT=( "all_preproc_complete" )
 
 function check_complete {
@@ -22,6 +22,10 @@ function run_pipeline {
  id="$1"
  [ -z "$id" ] && warn "$FUNCNAME: no id given" && return 1
  #[ -z "$FM_CFG" ] && warn "$FUNCNAME: no FM_CFG in env!" && return 1
+
+ declare -f subj_sliceacq >/dev/null && FUNCSLICEACQ=$(subj_sliceacq "$id")
+ # otherwise should be set globally
+ [ -z "$FUNCSLICEACQ" ] && warn "pipeline requires FUNCSLICEACQ. Not provided by source!" && return 1
 
  [ ! -d "$id" ] && mkdir $id
  cd $id
@@ -51,6 +55,7 @@ function run_pipeline {
 
  [ -z "$TEMPLATE_RES" ] && TEMPLATE_RES=MNI_2.3mm && SMOOTH_KERNEL=4
  [ -z "$SMOOTH_KERNEL" ] && SMOOTH_KERNEL=5
+ [ -z "$TRUNC_VOLS" ] && trunc_arg="" || trunc_arg="-trunc $TRUNC_VOLS"
  [ -n "$SLICESETTINGSFILE" ] && SLICEOPTIONS="-custom_slice_times $SLICESETTINGSFILE"
  #SLICESETTINGSFILE=/Volumes/Phillips/mMR_PETDA/scripts/sliceTimings.1D 
 
@@ -68,27 +73,36 @@ function run_pipeline {
       warn "no file $(pwd)/.preprocessfunctional_complete"
     fi
 
+    distortion_dir="$(cd ../../ppDistortion/$id/unwarp && pwd)"
+    [ -z "$distortion_dir" ] && return 1
 
-    # TODO: remove partial_proc
-    # replace with fieldmap
+
+    # want to rewrite/rerun these
+    test -r .preproc_cmd && rm $_
+    # # in previous run, bbr was not run?!
+    # test -r .func2struct_complete && rm $_
 
     yes | preprocessFunctional \
-       -partial_proc despike \
-       -tr $FUNCTR  \
+       -partial_proc smooth \
        -4d func.nii.gz \
-       -mprage_bet $bet -warpcoef $warp \
+       -distortion_dir $distortion_dir \
+       -slice_acquisition $FUNCSLICEACQ \
+       -tr $FUNCTR  \
+       $trunc_arg \
+       -4d_slice_motion \
        -wavelet_despike  \
        -wavelet_threshold 10 \
-       -threshold 98_2 \
-       -no_st \
-       -bandpass_filter 0.009 .08  \
-       -rescaling_method 10000_globalmedian \
-       -template_brain MNI_2mm  \
        -func_struc_dof bbr  \
        -warp_interpolation spline  \
        -constrain_to_template y  \
+       -smoothing_kernel $SMOOTH_KERNEL \
+       -ica_aroma \
+       -mprage_bet $bet -warpcoef $warp \
+       -threshold 98_2 \
        -motion_censor fd=0.3,dvars=20  \
-       -smoothing_kernel 4 \
+       -bandpass_filter 0.009 .08  \
+       -rescaling_method 10000_globalmedian \
+       -template_brain MNI_2mm  \
        -nuisance_file nuisance_regressors.txt \
        -nuisance_compute csf,dcsf,wm,dwm \
        -nuisance_regression 6motion,d6motion,csf,dcsf,wm,dwm || echo "$(pwd): preprocessFunctional returned error!"

@@ -76,6 +76,18 @@ shift; shift;
 # set the exit trap so we when we die 
 trap trapmsg EXIT
 
+# JOB CONTROL
+# replace waitforjobs with a more robust version
+waitforjobssrc="/opt/ni_tools/lncdshell/utils/waitforjobs.sh"
+export JOBCFGDIR="$scriptdir/.jobcfg/$(basename $pipeline)-$(hostname)"
+WAITTIME=300
+if test -r $waitforjobssrc; then
+   source $waitforjobssrc
+else 
+   echo "could not find '$waitforjobssrc'; bash source needed for waitforjobs"
+   exit 1
+fi
+
 # def function to pick which to use
 # arguments as ids on the commad line
 # or list_all sourced from datasource file
@@ -181,13 +193,14 @@ args_or_list_all_ids $@ | while read id; do
  
  # wait a second for jobs to report they've already finished
  sleep 0.5
- waitforjobs $MAXJOBS
+ waitforjobs "last was $id"
 done
 
 #echo "# all jobs forked, waiting to complete"
 echo "Done launching jobs. waiting for all to fininish ($(njobs) jobs w/PIDS $PIDS)"
 #pstree -sp $$
-waitforjobs 1
+MAXJOBS=1
+waitforjobs "cleanup"
 # any jobs forked by children are not catpured here
 #[ $# -gt 1 -o $MAXJOBS -gt 1 ] && ps
 

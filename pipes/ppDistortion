@@ -6,8 +6,9 @@ with preprocessDistortion.
 also see MHFM
 "
 PIPE_DEPENDS=""
-PIPE_VERSION="20171114"
-FINALOUT=(".preprocessDistortion_complete" "unwarp/FM_UD_fmap_mag.nii.gz"  "unwarp/FM_UD_fmap.nii.gz")
+#PIPE_VERSION="20171114"
+PIPE_VERSION="20191111" # add fmtype - default to siemens; allow for ncanda pipeline
+FINALOUT=(".preprocessDistortion_complete" "unwarp/FM_UD_fmap_mag.nii.gz"  "unwarp/FM_UD_fmap.nii.gz" "unwarp/fm.cfg")
 
 function check_complete {
  wantonlyoneid $@ || return 1
@@ -22,15 +23,37 @@ function run_pipeline {
  wantonlyoneid $id || return 1
  [ ! -d "$id" ] && mkdir $id
  cd $id
+ # use function if we have it [currently only ncanda source - 20191111]
+ declare -f fm_cfg >/dev/null && FM_CFG=$(fm_cfg "$id")
+ # otherwise should be set globally
  [ -z $FM_CFG ] && warn "pipeline requires FM_CFG. Not provided by source!" && return 1
 
- # find the t1dir with MRs in it
- read mrmag mrphase < <(subj_fm $id)
- [ -z "$mrmag" -o -z "$mrphase" ] && warn "could not find fm mag and phase for $id: source pipeline and source; 'subj_fm $id'" && return 1
- [ ! -d "$mrmag" ] && warn "bad mrphase dir $mrmag" && return 1
- [ ! -d "$mrphase" ] && warn "bad mrphase dir $mrphase" && return 1
+ # fmtype defaults to siemens [only ncanda source has subj_fm_type - 20191111]
+ fmtype=$(subj_fm_type $id || echo siemens)
+ echo "$fmtype"
 
- preprocessDistortion -phasedir $mrphase -magdir $mrmag -fm_cfg $FM_CFG
+ case $fmtype in 
+     siemens)
+        echo "running siemens"
+       # find the t1dir with MRs in it
+       read mrmag mrphase < <(subj_fm $id)
+       [ -z "$mrmag" -o -z "$mrphase" ] && warn "could not find fm mag and phase for $id: source pipeline and source; 'subj_fm $id'" && return 1
+       [ ! -d "$mrmag" ] && warn "bad mrphase dir $mrmag" && return 1
+       [ ! -d "$mrphase" ] && warn "bad mrphase dir $mrphase" && return 1
+       preprocessDistortion -phasedir $mrphase -magdir $mrmag -fm_cfg $FM_CFG;;
+    *ge*rev)
+       read niidir < <(subj_fm $id)
+       [ -z "$niidir" ] && echo "no fm for $id" && return 1
+       preprocessDistortion -niidir $niidir -reverse -fm_cfg $FM_CFG;;
+    *ge|*ncanda*siemens)
+       read niidir < <(subj_fm $id)
+       [ -z "$niidir" ] && echo "no fm for $id" && return 1
+       preprocessDistortion -niidir $niidir -fm_cfg $FM_CFG;;
+   *)
+      echo "DONT KNOW WHAT TO DO WITH fieldmap type $fmtype" && return 1;;
+ esac
+ 
+
 
 
  # exit successfuly

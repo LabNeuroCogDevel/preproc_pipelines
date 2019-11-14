@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+ncandasrc="$(dirname ${BASH_SOURCE})/ncanda"
+[ -z "$ncandasrc" -o ! -r "$ncandasrc"  ] && echo "cannot find '$ncandasrc'" >&2 && exit 1
+source "$ncandasrc"
+
+# 80 char description
+SOURCE_DESC80="NCANDA siemens"
+
+#DBFILE="$NIIROOT/id_t1_epi.tsv"
+#DBSITE="$NIIROOT/id_site.tsv"
+function list_all {
+   # just the ids from DBFILE
+   _mkncandadb
+   _mkndcandasite
+   # siemens is site A and D
+   egrep '(A|D)$' $DBSITE |
+      cut -f1 |
+      join -j1 - $DBFILE |
+      cut -f1 -d' '
+}
