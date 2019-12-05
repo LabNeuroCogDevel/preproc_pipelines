@@ -16,7 +16,7 @@ FM_CFG=""
 
 function list_all {
  ls $BIDSROOT/sub-*/*/func/*task-MGS_*bold.nii.gz | 
- perl -lne 'print "${1}_$2" if m:sub-(\d+)/(\d+)/:'
+ perl -lne 'print "${1}_$2" if m:sub-(\d+)/(\d+)/:' | sort -u
 }
 
 
