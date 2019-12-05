@@ -16,6 +16,8 @@ NIIROOT="/Volumes/Hera/Raw/Datasets/NCANDA/"
 DBFILE="$NIIROOT/id_t1_epi.tsv"
 DBSITE="$NIIROOT/id_site.tsv"
 
+scannerargs=""
+
 # TODO: make config for ncanda 
 FM_CFG=""
 _mkndcandasite(){

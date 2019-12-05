@@ -4,7 +4,7 @@ PIPE_FOR="FC"
 PIPE_DESC80="Initial for ncanda"
 PIPE_DESC="
 Generic task pipeline with Distortion Correction (FM)
-TEMPLATE_RES default to 2.3
+TEMPLATE_RES default to 3
 does not include ICA aroma
 no slice time correct
 premature stop after depiking
@@ -53,10 +53,12 @@ function run_pipeline {
 
  local cnt=0
 
- [ -z "$TEMPLATE_RES" ] && TEMPLATE_RES=MNI_2.3mm && SMOOTH_KERNEL=4
+ [ -z "$TEMPLATE_RES" ] && TEMPLATE_RES=MNI_3mm && SMOOTH_KERNEL=5
  [ -z "$SMOOTH_KERNEL" ] && SMOOTH_KERNEL=5
  [ -z "$TRUNC_VOLS" ] && trunc_arg="" || trunc_arg="-trunc $TRUNC_VOLS"
  [ -n "$SLICESETTINGSFILE" ] && SLICEOPTIONS="-custom_slice_times $SLICESETTINGSFILE"
+ # should be -siemens, but left out
+ [ -z "$scannerargs" ] && scannerargs=""
  #SLICESETTINGSFILE=/Volumes/Phillips/mMR_PETDA/scripts/sliceTimings.1D 
 
  # for each t2 (using 'subjs_ts $id | while read' makes cnt inaccessible)
@@ -82,16 +84,17 @@ function run_pipeline {
     # # in previous run, bbr was not run?!
     # test -r .func2struct_complete && rm $_
 
+   #    -wavelet_threshold 10  is the default
+   #  dont expliclty used bause ge scannerargs sets to 100
     yes | preprocessFunctional \
-       -partial_proc smooth \
        -4d func.nii.gz \
+       $scannerargs \
        -distortion_dir $distortion_dir \
        -slice_acquisition $FUNCSLICEACQ \
        -tr $FUNCTR  \
        $trunc_arg \
        -4d_slice_motion \
        -wavelet_despike  \
-       -wavelet_threshold 10 \
        -func_struc_dof bbr  \
        -warp_interpolation spline  \
        -constrain_to_template y  \
@@ -102,10 +105,13 @@ function run_pipeline {
        -motion_censor fd=0.3,dvars=20  \
        -bandpass_filter 0.009 .08  \
        -rescaling_method 10000_globalmedian \
-       -template_brain MNI_2mm  \
+       -template_brain $TEMPLATE_RES  \
        -nuisance_file nuisance_regressors.txt \
        -nuisance_compute csf,dcsf,wm,dwm \
-       -nuisance_regression 6motion,d6motion,csf,dcsf,wm,dwm || echo "$(pwd): preprocessFunctional returned error!"
+       -nuisance_regression 6motion,d6motion,csf,dcsf,wm,dwm \
+      || echo "$(pwd): preprocessFunctional returned error!"
+
+       #-partial_proc smooth \
 
    # success, so increment count
    [ -r .preprocessfunctional_complete ] && let ++cnt
