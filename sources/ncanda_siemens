@@ -7,6 +7,8 @@ source "$ncandasrc"
 # 80 char description
 SOURCE_DESC80="NCANDA siemens"
 
+scannerargs="-siemens"
+
 #DBFILE="$NIIROOT/id_t1_epi.tsv"
 #DBSITE="$NIIROOT/id_site.tsv"
 function list_all {
