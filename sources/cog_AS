@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# OUTSIDE DEPENDS:
+#
+#  /Volumes/Hera/Projects/Cog/AS_long/txt/subjs.tsv
+#  /Volumes/Phillips/COG/scripts/txt/sequenceList.txt
+
+SOURCE_DESC80="cog long AntiState task"
+FUNCTR="1.5"
+FUNCSLICEACQ="interleaved"
+TEMPLATE_RES=MNI_3mm 
+SMOOTH_KERNEL=5
+DICOM_PAT="*dcm"
+
+# no raw data, only niftis
+MRROOT=""  DICOM_PAT="*dcm"
+# but do have t1 dicoms
+# no fieldmap
+NO_FM=1
+FM_CFG="" FMNMAG= FMNPHS=
+# no slicetiming
+SLICESETTINGSFILE="" TIMING1D="" SUBJECTS_DIR=""
+
+
+# find subjects by listing who has mprages preprocessed
+function list_all {
+   # list from jen
+   sed 1d /Volumes/Hera/Projects/Cog/AS_long/txt/subjs.tsv|
+      cut -f1-2|
+      sed 's/\s/_/'
+}
+
+function subj_t1 {
+ wantonlyoneid $@ || return 1
+ # LunaID BIRCID db.sex db.dob db.visitdate db.age ndcms protocol dcm.visitdate dcm.dob dcm.sex dcm.age path
+ # match ndcm and lunad + start of bircid
+ # remove 20 from date to get start of bircid
+ # print the folder
+ awk "(/^${1/_20/ }.*t1_mprage/ && \$7 == 224){print \$13;exit}" \
+    /Volumes/Phillips/COG/scripts/txt/sequenceList.txt
+}
+
+
+# return nii.gz and task name (taskname=1-4)
+# 
+function subj_t2s {
+ wantonlyoneid $@ || return 1
+ perl -MFile::Basename=basename -slane\
+    'next unless m:^${ld_birc}.*VGS.*?(/.*):;
+     $a{sprintf("%03d",basename($1))}=$1;
+     END{ print "$a{$_} ", ++${i}, "_$_" for sort keys %a}' -- \
+  -ld_birc="${$1/_20/ }" /Volumes/Phillips/COG/scripts/txt/sequenceList.txt  
+}
+subj_t2() { subj_t2s $@||return 1;}
+
+# will take directory instead of lunaid
+function subj_ref {
+ return 1
+}
+
+
+function subj_physio {
+ return 1
+ wantonlyoneid $@ || return 1
+}
+
+function subj_fm {
+ return 1
+ wantonlyoneid $@ || return 1
+}
+
