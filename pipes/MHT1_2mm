@@ -42,7 +42,8 @@ function run_pipeline {
        [ -r ./$(basename $d) ] && continue
        ln -s $d ./$(basename $d) || return 1
       done
-      preprocessMprage -r MNI_2mm -d yes && touch ".mprage_complete"
+      [ -z "$DICOM_PAT" ] && DICOM_PAT="MR*" # for default
+      preprocessMprage -p "$DICOM_PAT" -r MNI_2mm -d yes && touch ".mprage_complete"
    fi
 
  elif [ -r "$t1dir" -a ! -d "$t1dir" ]; then
