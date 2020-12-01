@@ -19,6 +19,7 @@ function run_pipeline {
  id="$1"
  wantonlyoneid $id || return 1
  [ ! -d "$id" ] && mkdir $id
+ env|grep USEOLDPPOPT= -q || local USEOLDPPOPT=""
  cd $id
 
  # find t1
@@ -43,12 +44,12 @@ function run_pipeline {
        ln -s $d ./$(basename $d) || return 1
       done
       [ -z "$DICOM_PAT" ] && DICOM_PAT="MR*" # for default
-      preprocessMprage -p "$DICOM_PAT" -r MNI_2mm -d yes && touch ".mprage_complete"
+      preprocessMprage $USEOLDPPOPT -p "$DICOM_PAT" -r MNI_2mm -d yes && touch ".mprage_complete"
    fi
 
  elif [ -r "$t1dir" -a ! -d "$t1dir" ]; then
    3dcopy $t1dir mprage.nii.gz
-   preprocessMprage -r MNI_2mm -n mprage.nii.gz && touch ".mprage_complete"
+   preprocessMprage $USEOLDPPOPT -r MNI_2mm -n mprage.nii.gz && touch ".mprage_complete"
 
  else
    warn "t1 input does not make sense: '$t1dir' (in $(pwd))"

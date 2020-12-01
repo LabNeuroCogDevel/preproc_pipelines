@@ -126,6 +126,7 @@ function run_pipeline {
 
    yes | preprocessFunctional \
       -tr $FUNCTR \
+      $USEOLDPPOPT \
       -func_refimg $refimg \
       -4d func.nii.gz  \
       -mprage_bet $bet -warpcoef $warp \
