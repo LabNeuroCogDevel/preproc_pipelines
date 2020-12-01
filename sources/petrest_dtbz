@@ -66,12 +66,12 @@ _dbquery() {
  fm_mag as (
  select patname,id,sessionname,seqno,dir
   from mrinfo 
-  where study like 'pet' and Name like 'gre_field_mapping' and ndcm = 90
+  where study like 'pet' and Name like '%gre_field_mapping' and ndcm = 90
  ),
  fm_phase as (
  select patname,id,sessionname,seqno,dir
   from mrinfo 
-  where study like 'pet' and Name like 'gre_field_mapping' and ndcm = 45
+  where study like 'pet' and Name like '%gre_field_mapping' and ndcm = 45
  ), 
  fm_match as (
   select m.patname,m.id,m.sessionname, 

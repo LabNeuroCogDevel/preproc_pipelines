@@ -3,7 +3,7 @@ SOURCE_DESC80="mMR DA PET first rest in session 1 (rac tracer)"
 
 _PETEPISUFFIX=racrest1
 SLICESETTINGSFILE=/Volumes/Phillips/mMR_PETDA/scripts/sliceTimings.1D 
-USEOLDPPOPT=-use_old_mni
+export USEOLDPPOPT=-use_old_mni
 
 # look up e*rest* directories from pet study in the mr protocol database
 # select the last rest with more than 200 dicoms for ids that have a B in them (only rac+dtbz people)
@@ -11,8 +11,9 @@ USEOLDPPOPT=-use_old_mni
 # merge with the closest fieldmap mag and phase
 # output columns:
 #  lunadate8 restepidir fmmagdir fmphasedir rest2magSeqNoDiff
+SQLDB=/Volumes/Zeus/mr_sqlite/db 
 _dbquery() {
- sqlite3 -separator $'\t' /Volumes/Zeus/mr_sqlite/db "
+ sqlite3 -separator $'\t' $SQLDB "
 with 
  func_count as (
   select id,sessionname,count(*) as nfuncs 
@@ -36,12 +37,12 @@ with
  fm_mag as (
  select patname,id,sessionname,seqno,dir
   from mrinfo 
-  where study like 'pet' and Name like 'gre_field_mapping' and ndcm = 90
+  where study like 'pet' and Name like '%gre_field_mapping' and ndcm = 90
  ),
  fm_phase as (
  select patname,id,sessionname,seqno,dir
   from mrinfo 
-  where study like 'pet' and Name like 'gre_field_mapping' and ndcm = 45
+  where study like 'pet' and Name like '%gre_field_mapping' and ndcm = 45
  ), 
  fm_match as (
   select m.patname,m.id,m.sessionname, m.dir as fmmag,p.dir as fmphase, m.seqno as magseqno ,p.seqno as phaseseqno
@@ -79,6 +80,20 @@ select ld8,dir as restdir,fmmag,fmphase,diff
 # ld8, restdir, fmmag, fmphase, diff
 echo -e "99998_20190103	/Volumes/Phillips/mMR_PETDA/raw/99998_20190103/2019.01.03-10.49.25/99998_20190103/ep2d_BOLD_resting_320meas_672x672.8	/Volumes/Phillips/mMR_PETDA/raw/99998_20190103/2019.01.03-10.49.25/99998_20190103/gre_field_mapping_96x96.5	/Volumes/Phillips/mMR_PETDA/raw/99998_20190103/2019.01.03-10.49.25/99998_20190103/gre_field_mapping_96x96.6	2"
 echo -e "99998_20190808	/Volumes/Phillips/mMR_PETDA/raw/99998_20190808/2019.08.08-13.14.49/20190808/Head_ep2d_BOLD_resting_WAIT-FOR-RECONSTRUCTION-FOR-EACH-SERIES_672x672.35	/Volumes/Phillips/mMR_PETDA/raw/99998_20190808/2019.08.08-13.14.49/20190808/Head_gre_field_mapping-x2_96x96.32	/Volumes/Phillips/mMR_PETDA/raw/99998_20190808/2019.08.08-13.14.49/20190808/Head_gre_field_mapping-x2_96x96.33	2"
+# 20201201 - rest failures (no good or repeat) mess up the db
+# e.g.
+#  dcmdirtab --cols seqno,pname,ndcm  -d '/Volumes/Hera/Raw/MRprojects/mMRDA-dev/*-08*/B0276/*'|sort -n
+tabsep(){ echo "$@"|sed 's/ \+/\t/g';}
+local rawdir=/Volumes/Hera/Raw/MRprojects/mMRDA-dev
+tabsep 11531_20190801 $rawdir/*-14*/B0326/*.{16,17,18} 1
+tabsep 11531_20190801 $rawdir/*-14*/B0326/*.{38,33,34} 2
+
+tabsep 11480_20190321 $rawdir/*-13*/B0280/*.{9,10,11} 1
+tabsep 11480_20190321 $rawdir/*-13*/B0280/*.{35,28,27} 2
+
+tabsep 11458_20190314 $rawdir/*-08*/B0278/*.{9,10,11} 1
+
+tabsep 11248_20190307 $rawdir/*-08*/B0276/*.{9,10,11} 1
 }
 
 SUBJECTS_DIR="/Volumes/Phillips/mMR_PETDA/FS"
@@ -98,8 +113,12 @@ FMNPHS=45
 
 _epimrpath() {
    # 20170719 - remove when duplicate becaue path has e.g. a/b and a//b
- mrpath=$(_dbquery | grep $1 |grep -v /moved/ |  cut -f2| sed 's:/\+:/:g' | grep -v 11515_20172018 | uniq )
- [ -z "$mrpath" -o ! -r "$mrpath" ] && echo -e "$1 has bad entry in db:\n$mrpath\n" >&2 && return 1
+ mrpath=$(_dbquery | grep -E ${1/_/.} |grep -v /moved/ |  cut -f2| sed 's:/\+:/:g' | grep -v 11515_20172018 | uniq )
+ if [ -z "$mrpath" -o ! -r "$mrpath" ]; then
+    echo "$1 has bad entry in '$SQLDB' (see ${BASH_SOURCE}::_dbquery|grep $1):" >&2
+    echo "  mrpath DNE '$mrpath'" >&2
+    return 1
+ fi
  echo $mrpath
 }
 ####
@@ -148,9 +167,9 @@ function subj_MRT1 {
  fi
 
  mrpath=$(_epimrpath "$1")
- subj_mr_pat "$(cd $mrpath/..;pwd)"  'Sagittal_MPRAGE_ADNI_G2_256x240*' 176 ||
-  subj_mr_pat "$(cd $mrpath/..;pwd)"  'Sagittal_MPRAGE_ADNI_G2_256x256*' 176 || # 11459_20160121
-  subj_mr_pat "$(cd $mrpath/..;pwd)"  'Sagittal_MPRAGE_ADNI_256x240*' 160 || return 1
+ subj_mr_pat "$(cd $mrpath/..;pwd)"  '*Sagittal_MPRAGE_ADNI_G2_256x240*' 176 ||
+  subj_mr_pat "$(cd $mrpath/..;pwd)"  '*Sagittal_MPRAGE_ADNI_G2_256x256*' 176 || # 11459_20160121
+  subj_mr_pat "$(cd $mrpath/..;pwd)"  '*Sagittal_MPRAGE_ADNI_256x240*' 160 || return 1
  #subj_mr_pat $MRROOT/$1 'axial_mprage_256x208*' 176 || return 1
 }
 
@@ -207,6 +226,6 @@ function subj_fm {
  # [ -z "$phase" ] && return 1
  # echo "$mag $phase"
 
- _dbquery |grep $1 | cut -f3,4
+ _dbquery |grep -E ${1/_/.} | cut -f3,4
 }
 
