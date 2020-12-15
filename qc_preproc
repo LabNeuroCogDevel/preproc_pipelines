@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# run visualqc on a given preproc directory
+# 20201215 - init
+
+PROC_ROOT=/Volumes/Zeus/preproc
+
+list_projects(){
+  find -L $PROC_ROOT -mindepth 2 -maxdepth 2 -type d,l -not -ipath '*scripts*' -print0 2>/dev/null |
+   xargs -0 stat -c "%Y %n" | 
+   sort -nr |
+   sed 's:.*/preproc/::'
+}
+
+usage(){
+ cat <<HEREDOC
+ USAGE:
+    $(basename $0) <preproc_dir>
+ EXAMPLE:
+    qc_preproc 7TBrainMech_rest/MHT1_2mm
+
+ dirs in $PROC_ROOT like
+HEREDOC
+
+ list_projects | sed 's/^/  /' | head -n 15
+ exit
+}
+
+
+qat1_raw(){ vqcanat -u $1 -m mprage.nii.gz; }
+qat1(){
+   local procdir="$1"; shift
+   local warped=mprage_nonlinear_warp_MNI_2mm.nii.gz
+
+   # want to include version with skull
+   template="$(find $procdir -name 'template_brain.nii' -print -quit)"
+   [ -z "$template" ] && echo "ERROR: no '$procdir/**/template_brain.nii'" && return 1
+   #  3dinfo -ni -iname /opt/ni_tools/standard_{templates,old}/mni*/*brain_2mm.nii
+   #97      standard_templates/mni*/*_2mm.nii
+   #96      standard_old/mni*/*_2mm.nii
+   echo $template
+   case $(3dinfo -ni $template) in
+      97) template_w_skull="/opt/ni_tools/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_2mm.nii";;
+      96) template_w_skull="/opt/ni_tools/standard_old/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_2mm.nii";;
+      *) echo "unknown template: $template"; return 1;;
+   esac
+
+   # add templates where they dont exist
+   local tmplt_w_skull_name="$(basename $template_w_skull)"
+   find $procdir -name 'template_brain.nii' | while read subj_temp; do
+      local sdir=$(dirname $subj_temp)
+      [ ! -r $sdir/$tmplt_w_skull_name ] && ln -s $template_w_skull $sdir || :
+   done
+   
+   # could specify a specific subject with
+   # -i <(echo 10129_20180917) 
+   vqcalign -d $procdir  -i1 $warped -i2 $tmplt_w_skull_name -old
+}
+
+qat2(){
+  local procdir="$1"; shift 
+  warpfile=$(basename $(find $procdir -name 'w.*_tmean.nii.gz' -print -quit))
+  [ -z "$warpfile" ] && echo "ERROR: no $procdir/**/w*tmean.nii.gz file found!" && return 1
+
+  vqcalign -d $procdir  -i1 $warpfile -i2 template_brain.nii -old
+  # -l <(echo 10129_20180917)
+}
+
+[ $# -eq 0 -o $# -gt 1 ] && usage
+
+procdir=$1
+[ ! -d $procdir ] && procdir=$PROC_ROOT/$procdir
+[ ! -d $procdir ] && echo "ERROR: cannot find directory '$1' (nor '$procdir')" && exit 1
+
+case $procdir in
+   *T1_*) qat1 $procdir;;
+   *ppDist*) echo "fieldmap qa not implemented";;
+   *Task*|*Rest*) qat2 $procdir;;
+   *) echo assuming preprocessFunctional; qat2 $procdir;;
+esac
+
