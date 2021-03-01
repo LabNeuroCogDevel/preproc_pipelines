@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+env|grep ^DRYRUN=. -q && DRYRUN=echo || DRYRUN=
 
 # run visualqc on a given preproc directory
 # 20201215 - init
@@ -11,6 +11,56 @@ list_projects(){
    xargs -0 stat -c "%Y %n" | 
    sort -nr |
    sed 's:.*/preproc/::'
+}
+
+old_or_new_path(){
+   local input="$1"; shift
+   #  3dinfo -ni -iname /opt/ni_tools/standard_{templates,old}/mni*/*brain_2mm.nii
+   #97      standard_templates/mni*/*_2mm.nii
+   #96      standard_old/mni*/*_2mm.nii
+   idim=$(3dinfo -ni $input)
+   case $idim in
+      97)
+         temp_path="/opt/ni_tools/standard/";;
+      96)
+         temp_path="/opt/ni_tools/standard_old/";;
+      *)
+         echo "unknown dim '3dinfo -ni'==$idim for '$input'" >&2
+         return 1;;
+      esac
+      echo $temp_path/mni_icbm152_nlin_asym_09c/
+}
+
+find_template(){
+   # look in a  directory for any mni named files
+   # and give an aboslute path to the template used to align/compare
+   # defaults to skullstripped version
+
+   local procdir="$1"; shift
+
+   # what file to link in. default to no skull
+   template_file=mni_icbm152_t1_tal_nlin_asym_09c_brain_2mm.nii
+   [ $# -eq 1 ] && template_file="$1"
+
+   mninii=$(find "$procdir" -name '*MNI*.nii.gz' -not -iname '*coef*' -print -quit )
+   [ -z "$mninii" ] && echo "ERROR: no '$procdir/**/*mni*.nii'" >&2 && return 1
+   $DRYRUN : "$FUNCNAME: $mninii" >&2
+
+   abstemplate=$(old_or_new_path "$mninii")/$template_file
+   test ! -r "$abstemplate" && echo "template could not be found. tried '$_'" >&2 && return 1
+   echo $abstemplate
+}
+
+template_and_link(){
+   local procdir="$1"; shift
+   local abstemplate="$1"; shift
+
+   # add templates where they dont exist
+   local tmplt_w_skull_name="$(basename $abstemplate)"
+   find $procdir -name 'mprage_bet.nii.gz' | while read subj_temp; do
+      local sdir=$(dirname $subj_temp)
+      test ! -r $sdir/$tmplt_w_skull_name && $DRYRUN ln -s $abstemplate $sdir || $DRYRUN : have $_
+   done
 }
 
 usage(){
@@ -31,52 +81,47 @@ HEREDOC
 qat1_raw(){ vqcanat -u $1 -m mprage.nii.gz; }
 qat1(){
    local procdir="$1"; shift
-   local warped=mprage_nonlinear_warp_MNI_2mm.nii.gz
+   local warped=mprage_nonlinear_warp_MNI_2mm_bet.nii.gz
+   local mnitemplate=$(find_template $procdir)
 
-   # want to include version with skull
-   template="$(find $procdir -name 'template_brain.nii' -print -quit)"
-   [ -z "$template" ] && echo "ERROR: no '$procdir/**/template_brain.nii'" && return 1
-   #  3dinfo -ni -iname /opt/ni_tools/standard_{templates,old}/mni*/*brain_2mm.nii
-   #97      standard_templates/mni*/*_2mm.nii
-   #96      standard_old/mni*/*_2mm.nii
-   echo $template
-   case $(3dinfo -ni $template) in
-      97) template_w_skull="/opt/ni_tools/standard/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_2mm.nii";;
-      96) template_w_skull="/opt/ni_tools/standard_old/mni_icbm152_nlin_asym_09c/mni_icbm152_t1_tal_nlin_asym_09c_2mm.nii";;
-      *) echo "unknown template: $template"; return 1;;
-   esac
+   # or version with skull
+   #local warped=mprage_nonlinear_warp_MNI_2mm.nii.gz
+   #local mnitemplate=$(find_template_w_skull $procdir mni_icbm152_t1_tal_nlin_asym_09c_2mm.nii)
 
-   # add templates where they dont exist
-   local tmplt_w_skull_name="$(basename $template_w_skull)"
-   find $procdir -name 'template_brain.nii' | while read subj_temp; do
-      local sdir=$(dirname $subj_temp)
-      [ ! -r $sdir/$tmplt_w_skull_name ] && ln -s $template_w_skull $sdir || :
-   done
+   test ! -r $mnitemplate && return 1
+   template_and_link $procdir $mnitemplate
    
    # could specify a specific subject with
    # -i <(echo 10129_20180917) 
-   vqcalign -d $procdir  -i1 $warped -i2 $tmplt_w_skull_name -old
+   $DRYRUN vqcalign -d $procdir  -i1 $warped -i2 $(basename $mnitemplate) -old
 }
 
 qat2(){
   local procdir="$1"; shift 
   warpfile=$(basename $(find $procdir -name 'w.*_tmean.nii.gz' -print -quit))
-  [ -z "$warpfile" ] && echo "ERROR: no $procdir/**/w*tmean.nii.gz file found!" && return 1
+  [ -z "$warpfile" ] && echo "ERROR: no $procdir/**/w*tmean.nii.gz file found!" >&2 && return 1
 
   vqcalign -d $procdir  -i1 $warpfile -i2 template_brain.nii -old
   # -l <(echo 10129_20180917)
 }
 
-[ $# -eq 0 -o $# -gt 1 ] && usage
+find_procdir() {
+   local procdir="$1"; shift
+   [ ! -d $procdir ] && procdir=$PROC_ROOT/$procdir
+   [ ! -d $procdir ] && echo "ERROR: cannot find directory '$1' (nor '$procdir')" >&2 && exit 1
+   echo $procdir
+}
 
-procdir=$1
-[ ! -d $procdir ] && procdir=$PROC_ROOT/$procdir
-[ ! -d $procdir ] && echo "ERROR: cannot find directory '$1' (nor '$procdir')" && exit 1
+_qc_preproc(){
+   set -euo pipefail
+   [ $# -eq 0 -o $# -gt 1 ] && usage
+   procdir=$(find_procdir "$1")
+   case $procdir in
+      *T1_*) qat1 $procdir;;
+      *ppDist*) echo "fieldmap qa not implemented";;
+      *Task*|*Rest*) qat2 $procdir;;
+      *) echo assuming preprocessFunctional; qat2 $procdir;;
+   esac
+}
 
-case $procdir in
-   *T1_*) qat1 $procdir;;
-   *ppDist*) echo "fieldmap qa not implemented";;
-   *Task*|*Rest*) qat2 $procdir;;
-   *) echo assuming preprocessFunctional; qat2 $procdir;;
-esac
-
+[[ "$(caller)" != "0 "* ]] || _qc_preproc "$@"
