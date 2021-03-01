@@ -1,5 +1,5 @@
 suppressMessages(library(dplyr))
-db <- src_sqlite("/Volumes/Zeus/mr_sqlite/db")
+db <- DBI::dbConnect(RSQLite::SQLite(), dbname = "/Volumes/Zeus/mr_sqlite/db")
 d <- tbl(db, "mrinfo")
 suppressWarnings(d <- as.data.frame(d))
 get_protocol <- function(d, namepat=NA, dirpat=NA, ndcm=NA) {

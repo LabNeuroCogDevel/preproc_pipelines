@@ -11,6 +11,7 @@ export USEOLDPPOPT=-use_old_mni
 # merge with the closest fieldmap mag and phase
 # output columns:
 #  lunadate8 restepidir fmmagdir fmphasedir rest2magSeqNoDiff
+tabsep(){ echo "$@"|sed 's/ \+/\t/g';}
 SQLDB=/Volumes/Zeus/mr_sqlite/db 
 _dbquery() {
  sqlite3 -separator $'\t' $SQLDB "
@@ -83,13 +84,12 @@ echo -e "99998_20190808	/Volumes/Phillips/mMR_PETDA/raw/99998_20190808/2019.08.0
 # 20201201 - rest failures (no good or repeat) mess up the db
 # e.g.
 #  dcmdirtab --cols seqno,pname,ndcm  -d '/Volumes/Hera/Raw/MRprojects/mMRDA-dev/*-08*/B0276/*'|sort -n
-tabsep(){ echo "$@"|sed 's/ \+/\t/g';}
 local rawdir=/Volumes/Hera/Raw/MRprojects/mMRDA-dev
 tabsep 11531_20190801 $rawdir/*-14*/B0326/*.{16,17,18} 1
-tabsep 11531_20190801 $rawdir/*-14*/B0326/*.{38,33,34} 2
+#tabsep 11531_20190801 $rawdir/*-14*/B0326/*.{38,33,34} 2
 
 tabsep 11480_20190321 $rawdir/*-13*/B0280/*.{9,10,11} 1
-tabsep 11480_20190321 $rawdir/*-13*/B0280/*.{35,28,27} 2
+#tabsep 11480_20190321 $rawdir/*-13*/B0280/*.{35,28,27} 2
 
 tabsep 11458_20190314 $rawdir/*-08*/B0278/*.{9,10,11} 1
 

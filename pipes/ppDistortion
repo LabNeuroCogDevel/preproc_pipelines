@@ -29,7 +29,7 @@ function run_pipeline {
  [ -z $FM_CFG ] && warn "pipeline requires FM_CFG. Not provided by source!" && return 1
 
  # fmtype defaults to siemens [only ncanda source has subj_fm_type - 20191111]
- fmtype=$(subj_fm_type $id || echo siemens)
+ [ -n "$(command -v subj_fm_type)" ] && fmtype=$(subj_fm_type $id) || fmtype="siemens"
  echo "$fmtype"
 
  case $fmtype in 

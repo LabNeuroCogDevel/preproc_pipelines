@@ -48,7 +48,7 @@ function subj_t2s {
     'next unless m:^${ld_birc}.*VGS.*?(/.*):;
      $a{sprintf("%03d",basename($1))}=$1;
      END{ print "$a{$_} ", ++${i}, "_$_" for sort keys %a}' -- \
-  -ld_birc="${$1/_20/ }" /Volumes/Phillips/COG/scripts/txt/sequenceList.txt  
+  -ld_birc="${1/_20/ }" /Volumes/Phillips/COG/scripts/txt/sequenceList.txt  
 }
 subj_t2() { subj_t2s $@||return 1;}
 

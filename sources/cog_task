@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 SOURCE_DESC80="cog long task"
+# source is not the actual source
+# see /Volumes/Hera/preproc/cog_task/rest_spikemin/fakeit.bash
+# which pulls from /Volumes/Phillips/CogRest/subjs/*/preproc (/rest_[1-4]/tm_rest_[1-4].nii.gz
 
 
 FUNCTR="1.5"

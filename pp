@@ -87,6 +87,7 @@ else
    echo "could not find '$waitforjobssrc'; bash source needed for waitforjobs"
    exit 1
 fi
+echo "# set jobs in $JOBCFGDIR"
 
 # def function to pick which to use
 # arguments as ids on the commad line
@@ -181,6 +182,7 @@ args_or_list_all_ids $@ | while read id; do
  if [ $MAXJOBS -eq 1 ]; then
    echo "# running $datasource::$pipeline for $id ($(njobs)/$MAXJOBS jobs)"
    runwithdepends $id  || warn "could not finish $id"
+   echo "# finished $id"
    continue
 
  #fork: run a whole bunch at the same time
@@ -188,20 +190,15 @@ args_or_list_all_ids $@ | while read id; do
    runwithdepends $id &
    PIDS=(${PIDS[@]} $!)
    echo "# launched $datasource::$pipeline for $id ($(njobs)/$MAXJOBS jobs)"
+   # wait a second for jobs to report they've already finished
+   sleep 0.5
+   waitforjobs "last was $id"
  fi
-
- 
- # wait a second for jobs to report they've already finished
- sleep 0.5
- waitforjobs "last was $id"
 done
 
 #echo "# all jobs forked, waiting to complete"
-echo "Done launching jobs. waiting for all to fininish ($(njobs) jobs w/PIDS $PIDS)"
+echo "# Done launching jobs. waiting for all to fininish ($(njobs) jobs w/PIDS $PIDS)"
 #pstree -sp $$
-MAXJOBS=1
-waitforjobs "cleanup"
 # any jobs forked by children are not catpured here
 #[ $# -gt 1 -o $MAXJOBS -gt 1 ] && ps
-
-echo "finished! have $(njobs) jobs w/PIDS: $PIDS"
+wait

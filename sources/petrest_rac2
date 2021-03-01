@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # use rac1 as a template
-rac1file=$(dirname ${BASH_SOURCE})/petrest_rac1
+rac1file=$(dirname ${BASH_SOURCE})/petrest_rac1 # tabsep, most settings
 [ ! -r $rac1file ] && echo "cannot find '$rac1file'" >&2 && exit 1
 source $rac1file
 
@@ -77,5 +77,8 @@ select ld8,dir as restdir,fmmag,fmphase,diff
   from fm_rest 
   join best_match_no on closestdiff=diff and fm_rest.sessionname = best_match_no.sessionname
 ";
+local rawdir=/Volumes/Hera/Raw/MRprojects/mMRDA-dev
+tabsep 11531_20190801 $rawdir/*-14*/B0326/*.{38,33,34} 2
+tabsep 11480_20190321 $rawdir/*-13*/B0280/*.{35,28,27} 2
 }
 
