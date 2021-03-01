@@ -15,7 +15,7 @@ BIDSROOT="/Volumes/Hera/Raw/BIDS/7TBrainMech/"
 FM_CFG=""
 
 function list_all {
- ls $BIDSROOT/sub-*/*/func/*task-MGS_*bold.nii.gz | 
+ ls $BIDSROOT/sub-*/*/func/*task-MGS*bold.nii.gz | 
  perl -lne 'print "${1}_$2" if m:sub-(\d+)/(\d+)/:' | sort -u
 }
 
@@ -27,13 +27,15 @@ function subj_t1 {
 }
 
 function subj_t2s {
+   # /Volumes/Hera/Raw/BIDS/7TBrainMech/sub-11823/20210122/func/sub-11823_task-MGS_run-01_bold.nii.gz      01
+   # /Volumes/Hera/Raw/BIDS/7TBrainMech/sub-11863/20210225/func/sub-11863_task-mgsshort2_run-03_bold.nii.gz        03_2
  wantonlyoneid $@ || return 1
  find $(ld8_to_bids $1)/func/ -iname '*MGS*.nii.gz'  | 
- perl -lne 'chomp; print "$_\t$1" if m/run-(\d+)/;'
+    perl -lne 'chomp; print "$_\t$4$3$2" if m/(short(\d+)(_))?run-(\d+)/;'
  return 0
 }
 subj_t2(){
- echo "ERROR: looking for only one subj_t2 but should use subj_t2s -- there are 3 runs!"
+   echo "ERROR: looking for only one subj_t2 but should use subj_t2s -- there are 3 runs (or as of 20210301, 6: 3x2)!"
  return 1
  #subj_t2s $@
 }
