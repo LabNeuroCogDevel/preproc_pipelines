@@ -1,0 +1,131 @@
+#!/usr/bin/bash
+PIPE_FOR="FC,D"
+PIPE_DESC80="7T native w/o smooth (reho)"
+PIPE_DESC="7T native space
+no fieldmap, no slice time correct, no warp, and no smooth
+TEMPLATE_RES default to 2 and Kernel to 4 (but if tempres is set, default to 5)
+uses files from MHRest_nost_ica
+do not want smoothing in reho
+"
+PIPE_DEPENDS=("MHT1_2mm" "MHRest_nost_ica")
+PIPE_VERSION="20220222"
+FINALOUT=( "alltasks_preproc_complete" )
+
+function check_complete {
+ wantonlyoneid $@ || return 1
+ has_finalout  $1 || return 1
+ return 0
+}
+
+function run_pipeline {
+ id="$1"
+ [ -z "$id" ] && warn "$FUNCNAME: no id given" && return 1
+ #[ -z "$FM_CFG" ] && warn "$FUNCNAME: no FM_CFG in env!" && return 1
+ [ -z "$FUNCTR" ] && warn "FUNCTR is not defined!" && return 1
+
+ [ ! -d "$id" ] && mkdir $id
+ cd $id
+
+ #ref=$(subj_ref $id)
+ #read mag phase < <(find_fm $id)
+ #mag="../../MHFM/$id/mrmag/MR*"
+ #phase="../../MHFM/$id/mrphase/MR*"
+ read bet warp  < <(find_t1final $id)
+ for v in bet warp; do # t2 mag phase 
+   [ -z "${!v}" ] && warn "# cannot find $v for $id" && return 1
+ done
+
+ # which funcation to use for finding epi
+ findepi=subj_t2s
+ [ -z "$(type -f subj_t2s 2>/dev/null)" ] && findepi=subj_t2 
+
+ # create nii.gz from analize fmt (img hdr)
+ # find inputs
+ nt2=$($findepi $id |wc -l)
+ [  "$nt2" -eq 0 ] && warn "# $id: cannot find any t2s ($(pwd))" && return 1
+
+ maindir=$(pwd)
+
+
+ local cnt=0
+
+ [ -z "$SMOOTH_KERNEL" ] && SMOOTH_KERNEL=5
+ [ -z "$TEMPLATE_RES" ] && TEMPLATE_RES=MNI_2mm && SMOOTH_KERNEL=4
+
+ # all needed files before warp
+ # find -maxdepth 1 -not -newer wdkm_func.nii.gz
+ # nested for to allow globs
+ ppdir=$(pwd)
+ ! cd "../../MHRest_nost_ica/$id/" && echo "ERROR: $_ DNE!" && return 1
+ for prereq in {dkm,km,m,}_func*nii.gz motion_info motion.par mc_*nii.gz func_to_struct*nii.gz epi_bet.nii.gz \
+.reorient2std_complete .motion_correction_complete .func2struct_complete .motion_plots_complete .skull_strip_complete .thresholding_complete .despike_complete .motion_censor_complete .pct2 .median_intensity; do
+   [ ! -r "$prereq" ] && echo "ERROR: $(pwd)/$prereq DNE!" >&2 && cd $maindir && return 1
+   test ! -r "$ppdir/$prereq" && ln -s "$(pwd)/$prereq" "$_"
+ done
+ # might overwrite transforms. so copy those
+ cp -r transforms/ $ppdir/
+ cd "$ppdir"
+
+ # for each t2 (using 'subjs_ts $id | while read' makes cnt inaccessible)
+ while read t2nii name; do
+    [ -z "$t2nii" -o ! -r "$t2nii" ] && warn "# $id: provided t2 ('$t2nii') does not exist (task '$name')" && continue 
+    rundir=$maindir/$name
+    [ ! -d "$rundir" ] && mkdir "$rundir"
+    [ ! -e "$rundir/func.nii.gz" ] && ln -s "$t2nii" "$rundir/func.nii.gz"
+    cd "$rundir"
+    if [ -r .preprocessfunctional_complete ]; then 
+      let ++cnt
+      continue
+    else
+      warn "no file $(pwd)/.preprocessfunctional_complete"
+    fi
+
+    #-func_refimg functional_ref.nii.gz \
+    #-nuisance_regression 6motion,d6motion,csf,dcsf,wm,dwm \
+    #-custom_slice_times /Volumes/Phillips/mMR_PETDA/scripts/sliceTimings.1D \
+    # -hp_filter 40
+    yes | preprocessFunctional \
+       -tr $FUNCTR  \
+       -4d func.nii.gz \
+       -mprage_bet $bet -warpcoef $warp \
+       -no_warp \
+       -wavelet_despike  \
+       -wavelet_threshold 10 \
+       -threshold 98_2 \
+       -no_st \
+       -no_smooth \
+       `#-ica_aroma` \
+       -bandpass_filter 0.009 .08  \
+       -rescaling_method 10000_globalmedian \
+       -template_brain $TEMPLATE_RES  \
+       -func_struc_dof bbr  \
+       -warp_interpolation spline  \
+       -constrain_to_template y  \
+       -motion_censor fd=0.3,dvars=20  \
+       -smoothing_kernel $SMOOTH_KERNEL \
+       -nuisance_file nuisance_regressors.txt \
+       -nuisance_compute csf,dcsf,wm,dwm,gs \
+       -nuisance_regression 6motion,d6motion,csf,dcsf,wm,dwm,gs \
+       -gsr || echo "$(pwd): preprocessFunctional returned error!"
+
+ # create Wbgrndkm_func.nii.gz -- warp to mprage
+ 3dresample -inset "$bet" -dxyz $(3dinfo -ad3 bgrndkm_mean_func.nii.gz) -prefix mprage_bet_res.nii.gz
+ flirt -init transforms/func_to_struct.mat -applyxfm  -ref mprage_bet_res.nii.gz -in mc_target.nii.gz -o bgrndkm_
+ flirt -init transforms/func_to_struct.mat -applyxfm  -ref mprage_bet_res.nii.gz -in bgrndkm_func.nii.gz -o Wbgrndkm_func.nii.gz
+
+   # success, so increment count
+   [ -r .preprocessfunctional_complete ] && let ++cnt
+ done < <( $findepi $id 2>/dev/null )
+
+ # track when finished
+ warn "have cnt=$cnt"
+ cd $maindir
+ if [ $cnt -eq $nt2 ]; then
+   echo "$(date) finished $nt2" >>  "alltasks_preproc_complete"
+ else
+  warn "$id finished preproc of only '$cnt' of '$nt2' tasks"
+  return 1
+ fi
+
+ return 0
+}
