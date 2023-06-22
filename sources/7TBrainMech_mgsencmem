@@ -5,7 +5,7 @@ SOURCE_DESC80="7T brain mechanisms R01 rest"
 SUBJECTS_DIR="/DNE/" # no freesurfer currently
 DICOM_PAT="*IMA" # here, but do not use -- have "bids"
 
-FUNCTR="2.18" 
+FUNCTR="2.18" # see subj_tr() 2.18 only valid for first few
 FUNCSLICEACQ="3d" # no slice acq
 
 MRROOT="/Volumes/Hera/Raw/BIDS/7TBrainMech/rawlinks/"
@@ -19,7 +19,12 @@ function list_all {
  perl -lne 'print "${1}_$2" if m:sub-(\d+)/(\d+)/:' | sort -u
 }
 
-
+function subj_tr {
+  ld8="$1"; shift
+  trdb=/Volumes/Hera/Projects/7TBrainMech/scripts/mri/txt/task_trs.txt
+  tr=$(grep sub-"${ld8/_/\/}" $trdb |cut -d' ' -f2 |sed 1q)
+  [ -n "$tr" ] && echo "$tr" || echo $FUNCTR
+}
 
 function subj_t1 {
  wantonlyoneid $@ || return 1
@@ -35,7 +40,7 @@ function subj_t2s {
  return 0
 }
 subj_t2(){
-   echo "ERROR: looking for only one subj_t2 but should use subj_t2s -- there are 3 runs (or as of 20210301, 6: 3x2)!"
+   echo "ERROR: looking for only one subj_t2 but should use subj_t2s -- there are 3 runs (or as of 20210301, 6: 3x2)!" >&2
  return 1
  #subj_t2s $@
 }
